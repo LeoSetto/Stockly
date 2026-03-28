@@ -18,6 +18,7 @@ const DEFAULT_CONFIG = {
   rooms: ["Cozinha", "Sala", "Quarto", "Banheiro", "Lavanderia", "Área externa"],
   choreFreqs: ["Diário", "2x Semana", "Semanal", "Quinzenal", "Mensal"],
   expenseCategories: ["Mercado", "Hortifruti", "Limpeza", "Saúde", "Contas", "Lazer", "Transporte", "Outros"],
+  cards: ["Dinheiro", "Pix", "Cartão Crédito", "Cartão Débito"],
   mealDays: ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"],
   mealTypes: ["Café", "Almoço", "Lanche", "Jantar"],
   expiryWarnDays: 7,
@@ -56,12 +57,12 @@ const DEFAULT_DATA = {
     { id: 6, day: "Sexta", meal: "Almoço", recipe: "Peixe assado com purê" },
   ],
   expenses: [
-    { id: 1, desc: "Supermercado Pão de Açúcar", amount: 342.50, category: "Mercado", date: "2026-03-20", paid: true },
-    { id: 2, desc: "Feira livre", amount: 87.00, category: "Hortifruti", date: "2026-03-22", paid: true },
-    { id: 3, desc: "Material de limpeza", amount: 65.30, category: "Limpeza", date: "2026-03-18", paid: false },
-    { id: 4, desc: "Farmácia", amount: 120.00, category: "Saúde", date: "2026-03-15", paid: true },
-    { id: 5, desc: "Conta de luz", amount: 185.00, category: "Contas", date: "2026-03-10", paid: false },
-    { id: 6, desc: "Gás", amount: 110.00, category: "Contas", date: "2026-03-05", paid: true },
+    { id: 1, desc: "Supermercado Pão de Açúcar", amount: 342.50, category: "Mercado", date: "2026-03-20", paid: true, card: "Cartão Crédito" },
+    { id: 2, desc: "Feira livre", amount: 87.00, category: "Hortifruti", date: "2026-03-22", paid: true, card: "Pix" },
+    { id: 3, desc: "Material de limpeza", amount: 65.30, category: "Limpeza", date: "2026-03-18", paid: false, card: "Cartão Crédito" },
+    { id: 4, desc: "Farmácia", amount: 120.00, category: "Saúde", date: "2026-03-15", paid: true, card: "Dinheiro" },
+    { id: 5, desc: "Conta de luz", amount: 185.00, category: "Contas", date: "2026-03-10", paid: false, card: "" },
+    { id: 6, desc: "Gás", amount: 110.00, category: "Contas", date: "2026-03-05", paid: true, card: "Pix" },
   ],
   members: ["João", "Maria"],
   budget: 2500,
@@ -78,24 +79,34 @@ const DEFAULT_DATA = {
     { id: 10, name: "Café", unitPrice: 21.50, totalPrice: 21.50, qty: 500, unit: "g", date: "2026-03-05" },
   ],
   shoppingTrips: [],
-  _version: 4,
+  _version: 5,
 };
 
 // ─── Data migration — upgrades old data to new format ───
-const DATA_VERSION = 4;
+const DATA_VERSION = 5;
 const migrateData = (d) => {
   if (!d) return d;
   const v = d._version || 1;
   if (v >= DATA_VERSION) return d;
   let m = { ...d };
-  // v1→v2: add priceHistory if missing
   if (!m.priceHistory) m.priceHistory = [];
-  // v2→v3: add unitPrice to priceHistory entries, add shoppingTrips
   if (!m.shoppingTrips) m.shoppingTrips = [];
   m.priceHistory = (m.priceHistory || []).map(p => ({ ...p, unitPrice: p.unitPrice || p.price || 0, totalPrice: p.totalPrice || p.price || 0 }));
   m.grocery = (m.grocery || []).map(i => ({ ...i, price: i.price || 0, unitPrice: i.unitPrice || i.price || 0 }));
-  // v3→v4: add paid field to expenses (default: true for existing entries)
-  m.expenses = (m.expenses || []).map(e => ({ ...e, paid: e.paid !== undefined ? e.paid : true }));
+  // Add paid and card to expenses
+  m.expenses = (m.expenses || []).map(e => ({ ...e, paid: e.paid !== undefined ? e.paid : true, card: e.card || "" }));
+  // Add cards to config if missing
+  if (!m.config.cards) m.config.cards = ["Dinheiro", "Pix", "Cartão Crédito", "Cartão Débito"];
+  // v4→v5: Convert existing shoppingTrips to expenses (so they appear in Finanças)
+  if (v < 5 && m.shoppingTrips && m.shoppingTrips.length > 0) {
+    const existingDescs = (m.expenses || []).map(e => e.desc);
+    m.shoppingTrips.forEach(trip => {
+      const desc = "Compra " + new Date(trip.date + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+      if (trip.total > 0 && !existingDescs.includes(desc)) {
+        m.expenses.push({ id: Date.now() + Math.random(), desc, amount: trip.total, category: "Mercado", date: trip.date, paid: true, card: "", fromTrip: trip.id });
+      }
+    });
+  }
   m._version = DATA_VERSION;
   return m;
 };
@@ -239,43 +250,42 @@ return(<tr key={item.id}><td className="in">{item.name}</td><td>{item.qty} {item
 </Modal>}</div>);}
 
 // ─── GROCERY ───
-function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");
+function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");const[finishModal,setFinishModal]=useState(false);const[finishCard,setFinishCard]=useState(c.cards?.[0]||"");const[finishPaid,setFinishPaid]=useState(false);
 const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
 const toggle=(id)=>{const item=data.grocery.find(i=>i.id===id);if(item&&!item.checked){setPriceModal(item);setUnitPriceVal(item.unitPrice||"");}else{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));}};
 const confirmCheck=()=>{if(!priceModal)return;const up=Number(unitPriceVal)||0;const tp=up*(priceModal.qty||1);setData(d=>{const newPH=up>0?[...(d.priceHistory||[]),{id:Date.now(),name:priceModal.name,unitPrice:up,totalPrice:tp,qty:priceModal.qty,unit:priceModal.unit,date:today()}]:d.priceHistory||[];return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,unitPrice:up,price:tp}:i),priceHistory:newPH};});if(up>0)toast(`${priceModal.name}: ${fmt(up)}/un × ${priceModal.qty} = ${fmt(tp)}`);else toast("Item marcado");setPriceModal(null);setUnitPriceVal("");};
 const skipPrice=()=>{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true}:i)}));toast("Item marcado");setPriceModal(null);setUnitPriceVal("");};
-// Edit price of already checked item
-const saveEditPrice=()=>{if(!editingPrice)return;const up=Number(editUP)||0;const tp=up*(editingPrice.qty||1);setData(d=>{// Update grocery item
-const newGrocery=d.grocery.map(i=>i.id===editingPrice.id?{...i,unitPrice:up,price:tp}:i);// Update last priceHistory entry for this item on today's date, or add new
-let newPH=[...(d.priceHistory||[])];const existIdx=newPH.findIndex(p=>p.name===editingPrice.name&&p.date===today());if(up>0){if(existIdx>=0){newPH[existIdx]={...newPH[existIdx],unitPrice:up,totalPrice:tp};}else{newPH.push({id:Date.now(),name:editingPrice.name,unitPrice:up,totalPrice:tp,qty:editingPrice.qty,unit:editingPrice.unit,date:today()});}}return{...d,grocery:newGrocery,priceHistory:newPH};});toast("Preço atualizado");setEditingPrice(null);};
+const saveEditPrice=()=>{if(!editingPrice)return;const up=Number(editUP)||0;const tp=up*(editingPrice.qty||1);setData(d=>{const newGrocery=d.grocery.map(i=>i.id===editingPrice.id?{...i,unitPrice:up,price:tp}:i);let newPH=[...(d.priceHistory||[])];const existIdx=newPH.findIndex(p=>p.name===editingPrice.name&&p.date===today());if(up>0){if(existIdx>=0){newPH[existIdx]={...newPH[existIdx],unitPrice:up,totalPrice:tp};}else{newPH.push({id:Date.now(),name:editingPrice.name,unitPrice:up,totalPrice:tp,qty:editingPrice.qty,unit:editingPrice.unit,date:today()});}}return{...d,grocery:newGrocery,priceHistory:newPH};});toast("Preço atualizado");setEditingPrice(null);};
 const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
 const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:0,unitPrice:0}]}));toast("Adicionado");setModal(false);};
-const toP=(item)=>{setData(d=>({...d,pantry:[...d.pantry,{id:Date.now(),name:item.name,qty:item.qty,unit:item.unit,location:c.locations[0]||"Despensa",expiry:"",category:item.category}],grocery:d.grocery.filter(i=>i.id!==item.id)}));toast(`"${item.name}" → despensa`);};
-// Finish shopping: save trip and move to pantry
-const finishShopping=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total};setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));toast(`Compra finalizada! Total: ${fmt(total)}`);};
+// Open finish modal
+const openFinish=()=>{setFinishCard(c.cards?.[0]||"");setFinishPaid(false);setFinishModal(true);};
+// Finish shopping: save trip, create expense, move to pantry
+const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard};
+const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"});
+const expense={id:Date.now()+1,desc,amount:total,category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id};
+setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[expense,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
+toast(`Compra finalizada! ${fmt(total)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
 const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
 const doneTotal=done.reduce((a,i)=>a+(i.price||0),0);
-// Get last known unit price for an item
 const lastUnitPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.unitPrice||h[0]?.totalPrice||null;};
 return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados{doneTotal>0&&` · Total: ${fmt(doneTotal)}`}</div></div>
 <div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setModal(true);}}>{I.plus} Adicionar</button>
-{done.length>0&&<button className="btn bg" onClick={finishShopping}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
+{done.length>0&&<button className="btn bg" onClick={openFinish}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
 {pend.map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}/un</span>}<span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>);})}
 {done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
 {done.map(i=>(<div className="cr" key={i.id} style={{opacity:.7}}>
 <div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>
-<span className="cx dn">{i.name}</span>
-<span className="cm">{i.qty} {i.unit}</span>
+<span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>
 {i.price>0?<span style={{fontSize:12,color:"var(--green)",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setEditingPrice(i);setEditUP(i.unitPrice||"");}}>{fmt(i.unitPrice||0)}/un = {fmt(i.price)} {I.edit}</span>:<span style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}} onClick={()=>{setEditingPrice(i);setEditUP("");}}>+ preço</span>}
 <button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button>
 </div>))}
 </div>
-{/* Shopping trips history */}
 {(data.shoppingTrips||[]).length>0&&<div className="card"><div className="ct">Últimas Compras</div>
 {(data.shoppingTrips||[]).slice(0,5).map(trip=>(<div key={trip.id} style={{borderBottom:"1px solid var(--border)",padding:"12px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-<span style={{fontSize:13,color:"var(--text2)"}}>{new Date(trip.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long",year:"numeric"})}</span>
+<div><span style={{fontSize:13,color:"var(--text2)"}}>{new Date(trip.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long"})}</span>{trip.card&&<span className="tg tg-n" style={{marginLeft:8}}>{trip.card}</span>}</div>
 <span style={{fontSize:15,fontWeight:700,color:"var(--accent)"}}>{fmt(trip.total)}</span>
 </div>
 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{trip.items.map((it,idx)=>(<span key={idx} style={{fontSize:11,background:"var(--bg3)",padding:"3px 8px",borderRadius:6,color:"var(--text3)"}}>{it.name} {it.totalPrice>0?fmt(it.totalPrice):""}</span>))}</div>
@@ -289,21 +299,29 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 </Modal>}
 {priceModal&&<Modal title={`Preço: ${priceModal.name}`} onClose={()=>{skipPrice();}}>
 <div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Quanto custa cada unidade? (opcional)</div>
-<div className="fr">
-<div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={unitPriceVal} onChange={e=>setUnitPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
-<div className="fg"><label className="fl">Qtd</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{priceModal.qty} {priceModal.unit}</div></div>
-</div>
+<div className="fr"><div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={unitPriceVal} onChange={e=>setUnitPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
+<div className="fg"><label className="fl">Qtd</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{priceModal.qty} {priceModal.unit}</div></div></div>
 {Number(unitPriceVal)>0&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(unitPriceVal)*(priceModal.qty||1))}</div>}
 {lastUnitPrice(priceModal.name)&&<div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Último preço: {fmt(lastUnitPrice(priceModal.name))}/un</div>}
 <div className="ma"><button className="btn bg" onClick={skipPrice}>Pular</button><button className="btn bp" onClick={confirmCheck}>Registrar</button></div>
 </Modal>}
 {editingPrice&&<Modal title={`Editar preço: ${editingPrice.name}`} onClose={()=>setEditingPrice(null)}>
-<div className="fr">
-<div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={editUP} onChange={e=>setEditUP(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditPrice()}/></div>
-<div className="fg"><label className="fl">Qtd</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{editingPrice.qty} {editingPrice.unit}</div></div>
-</div>
+<div className="fr"><div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={editUP} onChange={e=>setEditUP(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditPrice()}/></div>
+<div className="fg"><label className="fl">Qtd</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{editingPrice.qty} {editingPrice.unit}</div></div></div>
 {Number(editUP)>0&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(editUP)*(editingPrice.qty||1))}</div>}
 <div className="ma"><button className="btn bg" onClick={()=>setEditingPrice(null)}>Cancelar</button><button className="btn bp" onClick={saveEditPrice}>Salvar</button></div>
+</Modal>}
+{finishModal&&<Modal title="Finalizar Compra" onClose={()=>setFinishModal(false)}>
+<div style={{fontSize:24,fontWeight:800,color:"var(--accent)",textAlign:"center",marginBottom:16}}>{fmt(doneTotal)}</div>
+<div style={{fontSize:13,color:"var(--text2)",marginBottom:16,textAlign:"center"}}>{done.length} ite{done.length>1?"ns":"m"} — vai para Finanças e Despensa</div>
+<div className="fg" style={{marginBottom:12}}><label className="fl">Forma de pagamento</label>
+<select value={finishCard} onChange={e=>setFinishCard(e.target.value)} style={{width:"100%"}}>
+<option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div>
+<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,cursor:"pointer"}} onClick={()=>setFinishPaid(!finishPaid)}>
+<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${finishPaid?"var(--green)":"var(--yellow)"}`,background:finishPaid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{finishPaid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
+<span style={{fontSize:14,color:finishPaid?"var(--green)":"var(--yellow)",fontWeight:500}}>{finishPaid?"Já pago":"Ainda não pago (cartão, fatura, etc)"}</span>
+</div>
+<div className="ma"><button className="btn bg" onClick={()=>setFinishModal(false)}>Cancelar</button><button className="btn bp" onClick={doFinish}>Confirmar</button></div>
 </Modal>}
 </div>);}
 
@@ -399,7 +417,7 @@ const paidTotal=expenses.filter(e=>e.paid).reduce((a,e)=>a+e.amount,0);
 const pendingTotal=expenses.filter(e=>!e.paid).reduce((a,e)=>a+e.amount,0);
 const rem=data.budget-ts;const pct=data.budget>0?Math.min((ts/data.budget)*100,100):0;
 const togglePaid=(id)=>{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===id?{...e,paid:!e.paid}:e)}));};
-const ae=()=>{if(!form.desc||!form.amount)return;setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false},...d.expenses]}));toast("Registrado");setModal(null);};
+const ae=()=>{if(!form.desc||!form.amount)return;setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false,card:form.card||""},...d.expenses]}));toast("Registrado");setModal(null);};
 const de=(id)=>{setData(d=>({...d,expenses:d.expenses.filter(e=>e.id!==id)}));toast("Removido");};
 const sb=()=>{setData(d=>({...d,budget:Number(bv)}));setEb(false);toast("Orçamento atualizado");};
 const bc={};expenses.forEach(e=>{bc[e.category]=(bc[e.category]||0)+e.amount;});
@@ -413,14 +431,15 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 <div className="sc rd"><div className="sl">Pendente</div><div className="sv" style={{color:"var(--yellow)"}}>{fmt(pendingTotal)}</div><div className="sd">{expenses.filter(e=>!e.paid).length} gasto{expenses.filter(e=>!e.paid).length!==1?"s":""}</div></div>
 </div>
 {Object.keys(bc).length>0&&<div className="card" style={{marginBottom:20}}><div className="ct">Por Categoria</div><div style={{display:"flex",flexWrap:"wrap",gap:12}}>{Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>(<div key={cat} style={{background:"var(--bg3)",borderRadius:8,padding:"10px 16px",flex:"1 1 140px"}}><div style={{fontSize:11,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1}}>{cat}</div><div style={{fontSize:18,fontWeight:700,marginTop:4}}>{fmt(val)}</div><div style={{fontSize:11,color:"var(--text3)"}}>{ts>0?((val/ts)*100).toFixed(0):0}%</div></div>))}</div></div>}
-<div className="tb"><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:today(),paid:false});setModal("add");}}>{I.plus} Novo Gasto</button>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:today(),paid:false,card:c.cards?.[0]||""});setModal("add");}}>{I.plus} Novo Gasto</button>
 <div style={{display:"flex",gap:4}}>{[{k:"all",l:"Todos"},{k:"pending",l:"Pendentes"},{k:"paid",l:"Pagos"}].map(f=><button key={f.k} className={`btn ${filter===f.k?"bp":"bg"} bs`} onClick={()=>setFilter(f.k)}>{f.l}</button>)}</div>
 </div>
-<div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th style={{width:40}}>Pago</th><th>Descrição</th><th>Valor</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
+<div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th style={{width:40}}>Pago</th><th>Descrição</th><th>Valor</th><th>Cartão</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
 {filtered.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(<tr key={e.id} style={{borderLeft:e.paid?"3px solid var(--green)":"3px solid var(--yellow)"}}>
 <td><div style={{width:24,height:24,borderRadius:6,border:`2px solid ${e.paid?"var(--green)":"var(--yellow)"}`,background:e.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .2s"}} onClick={()=>togglePaid(e.id)}>{e.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div></td>
 <td className="in" style={{opacity:e.paid?0.6:1}}>{e.desc}</td>
 <td style={{fontWeight:600,color:e.paid?"var(--green)":"var(--yellow)"}}>{fmt(e.amount)}</td>
+<td>{e.card?<span className="tg tg-b">{e.card}</span>:<span style={{color:"var(--text3)",fontSize:12}}>—</span>}</td>
 <td><span className="tg tg-n">{e.category}</span></td>
 <td style={{color:"var(--text3)"}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td>
 <td><button className="bi" onClick={()=>de(e.id)}>{I.trash}</button></td>
@@ -428,7 +447,9 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 </tbody></table></div></div>
 {modal&&<Modal title="Novo Gasto" onClose={()=>setModal(null)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><input type="number" step="0.01" value={form.amount||""} onChange={e=>setForm({...form,amount:e.target.value})}/></div></div>
-<div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div><div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
+<div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div>
+<div className="fg"><label className="fl">Cartão / Pagamento</label><select value={form.card||""} onChange={e=>setForm({...form,card:e.target.value})}><option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div></div>
+<div className="fr"><div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
 <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4,marginBottom:8,cursor:"pointer"}} onClick={()=>setForm({...form,paid:!form.paid})}>
 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${form.paid?"var(--green)":"var(--yellow)"}`,background:form.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{form.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
 <span style={{fontSize:14,color:form.paid?"var(--green)":"var(--yellow)",fontWeight:500}}>{form.paid?"Já pago":"Ainda não pago (cartão, fatura, etc)"}</span>
@@ -546,6 +567,7 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">📐 Unidades de Medida</div><TagEditor items={c.units} onAdd={v=>al("units",v)} onRemove={v=>rl("units",v)}/></div>
 <div className="card"><div className="sst">{I.chores} Cômodos da Casa</div><TagEditor items={c.rooms} onAdd={v=>al("rooms",v)} onRemove={v=>rl("rooms",v)}/></div>
 <div className="card"><div className="sst">🔄 Frequências de Tarefas</div><TagEditor items={c.choreFreqs} onAdd={v=>al("choreFreqs",v)} onRemove={v=>rl("choreFreqs",v)}/></div>
+<div className="card"><div className="sst">💳 Cartões / Formas de Pagamento</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Usados nas compras e finanças</p><TagEditor items={c.cards||[]} onAdd={v=>al("cards",v)} onRemove={v=>rl("cards",v)}/></div>
 <div className="card"><div className="sst">{I.meals} Dias do Cardápio</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Quais dias aparecem no planejador</p><TagEditor items={c.mealDays} onAdd={v=>al("mealDays",v)} onRemove={v=>rl("mealDays",v)}/></div>
 <div className="card"><div className="sst">🍽 Tipos de Refeição</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Café, almoço, jantar... ou o que quiser</p><TagEditor items={c.mealTypes} onAdd={v=>al("mealTypes",v)} onRemove={v=>rl("mealTypes",v)}/></div></>}
 
