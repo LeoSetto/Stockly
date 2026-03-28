@@ -56,12 +56,12 @@ const DEFAULT_DATA = {
     { id: 6, day: "Sexta", meal: "Almoço", recipe: "Peixe assado com purê" },
   ],
   expenses: [
-    { id: 1, desc: "Supermercado Pão de Açúcar", amount: 342.50, category: "Mercado", date: "2026-03-20" },
-    { id: 2, desc: "Feira livre", amount: 87.00, category: "Hortifruti", date: "2026-03-22" },
-    { id: 3, desc: "Material de limpeza", amount: 65.30, category: "Limpeza", date: "2026-03-18" },
-    { id: 4, desc: "Farmácia", amount: 120.00, category: "Saúde", date: "2026-03-15" },
-    { id: 5, desc: "Conta de luz", amount: 185.00, category: "Contas", date: "2026-03-10" },
-    { id: 6, desc: "Gás", amount: 110.00, category: "Contas", date: "2026-03-05" },
+    { id: 1, desc: "Supermercado Pão de Açúcar", amount: 342.50, category: "Mercado", date: "2026-03-20", paid: true },
+    { id: 2, desc: "Feira livre", amount: 87.00, category: "Hortifruti", date: "2026-03-22", paid: true },
+    { id: 3, desc: "Material de limpeza", amount: 65.30, category: "Limpeza", date: "2026-03-18", paid: false },
+    { id: 4, desc: "Farmácia", amount: 120.00, category: "Saúde", date: "2026-03-15", paid: true },
+    { id: 5, desc: "Conta de luz", amount: 185.00, category: "Contas", date: "2026-03-10", paid: false },
+    { id: 6, desc: "Gás", amount: 110.00, category: "Contas", date: "2026-03-05", paid: true },
   ],
   members: ["João", "Maria"],
   budget: 2500,
@@ -78,11 +78,11 @@ const DEFAULT_DATA = {
     { id: 10, name: "Café", unitPrice: 21.50, totalPrice: 21.50, qty: 500, unit: "g", date: "2026-03-05" },
   ],
   shoppingTrips: [],
-  _version: 3,
+  _version: 4,
 };
 
 // ─── Data migration — upgrades old data to new format ───
-const DATA_VERSION = 3;
+const DATA_VERSION = 4;
 const migrateData = (d) => {
   if (!d) return d;
   const v = d._version || 1;
@@ -90,10 +90,12 @@ const migrateData = (d) => {
   let m = { ...d };
   // v1→v2: add priceHistory if missing
   if (!m.priceHistory) m.priceHistory = [];
-  // v2→v3: add unitPrice to priceHistory entries, add shoppingTrips, ensure grocery items have price field
+  // v2→v3: add unitPrice to priceHistory entries, add shoppingTrips
   if (!m.shoppingTrips) m.shoppingTrips = [];
   m.priceHistory = (m.priceHistory || []).map(p => ({ ...p, unitPrice: p.unitPrice || p.price || 0, totalPrice: p.totalPrice || p.price || 0 }));
   m.grocery = (m.grocery || []).map(i => ({ ...i, price: i.price || 0, unitPrice: i.unitPrice || i.price || 0 }));
+  // v3→v4: add paid field to expenses (default: true for existing entries)
+  m.expenses = (m.expenses || []).map(e => ({ ...e, paid: e.paid !== undefined ? e.paid : true }));
   m._version = DATA_VERSION;
   return m;
 };
@@ -390,26 +392,47 @@ return(<div><div className="ph"><div className="pt">Cardápio Semanal</div><div 
 </Modal>}</div>);}
 
 // ─── BUDGET ───
-function BudgetPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[eb,setEb]=useState(false);const[bv,setBv]=useState(data.budget);
-const ts=data.expenses.reduce((a,e)=>a+e.amount,0);const rem=data.budget-ts;const pct=data.budget>0?Math.min((ts/data.budget)*100,100):0;
-const ae=()=>{if(!form.desc||!form.amount)return;setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today()},...d.expenses]}));toast("Registrado");setModal(null);};
+function BudgetPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[eb,setEb]=useState(false);const[bv,setBv]=useState(data.budget);const[filter,setFilter]=useState("all");
+const expenses=data.expenses||[];
+const ts=expenses.reduce((a,e)=>a+e.amount,0);
+const paidTotal=expenses.filter(e=>e.paid).reduce((a,e)=>a+e.amount,0);
+const pendingTotal=expenses.filter(e=>!e.paid).reduce((a,e)=>a+e.amount,0);
+const rem=data.budget-ts;const pct=data.budget>0?Math.min((ts/data.budget)*100,100):0;
+const togglePaid=(id)=>{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===id?{...e,paid:!e.paid}:e)}));};
+const ae=()=>{if(!form.desc||!form.amount)return;setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false},...d.expenses]}));toast("Registrado");setModal(null);};
 const de=(id)=>{setData(d=>({...d,expenses:d.expenses.filter(e=>e.id!==id)}));toast("Removido");};
 const sb=()=>{setData(d=>({...d,budget:Number(bv)}));setEb(false);toast("Orçamento atualizado");};
-const bc={};data.expenses.forEach(e=>{bc[e.category]=(bc[e.category]||0)+e.amount;});
+const bc={};expenses.forEach(e=>{bc[e.category]=(bc[e.category]||0)+e.amount;});
+const filtered=filter==="all"?expenses:filter==="paid"?expenses.filter(e=>e.paid):expenses.filter(e=>!e.paid);
 return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div className="ps">Controle gastos domésticos</div></div>
 <div className="sg">
 <div className="sc gn"><div className="sl">Orçamento</div><div className="sv" style={{display:"flex",alignItems:"center",gap:8}}>{fmt(data.budget)}<button className="bi" style={{padding:4}} onClick={()=>{setBv(data.budget);setEb(true);}}>{I.edit}</button></div></div>
-<div className="sc ac"><div className="sl">Total Gasto</div><div className="sv">{fmt(ts)}</div><div className="pb"><div className="pf" style={{width:`${pct}%`,background:pct>90?"var(--red)":pct>70?"var(--yellow)":"var(--green)"}}/></div></div>
+<div className="sc ac"><div className="sl">Total Comprometido</div><div className="sv">{fmt(ts)}</div><div className="pb"><div className="pf" style={{width:`${pct}%`,background:pct>90?"var(--red)":pct>70?"var(--yellow)":"var(--green)"}}/></div></div>
 <div className="sc bl"><div className="sl">Restante</div><div className="sv" style={{color:rem<0?"var(--red)":"var(--green)"}}>{fmt(rem)}</div></div>
+<div className="sc gn"><div className="sl">Pago</div><div className="sv" style={{color:"var(--green)"}}>{fmt(paidTotal)}</div></div>
+<div className="sc rd"><div className="sl">Pendente</div><div className="sv" style={{color:"var(--yellow)"}}>{fmt(pendingTotal)}</div><div className="sd">{expenses.filter(e=>!e.paid).length} gasto{expenses.filter(e=>!e.paid).length!==1?"s":""}</div></div>
 </div>
 {Object.keys(bc).length>0&&<div className="card" style={{marginBottom:20}}><div className="ct">Por Categoria</div><div style={{display:"flex",flexWrap:"wrap",gap:12}}>{Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>(<div key={cat} style={{background:"var(--bg3)",borderRadius:8,padding:"10px 16px",flex:"1 1 140px"}}><div style={{fontSize:11,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1}}>{cat}</div><div style={{fontSize:18,fontWeight:700,marginTop:4}}>{fmt(val)}</div><div style={{fontSize:11,color:"var(--text3)"}}>{ts>0?((val/ts)*100).toFixed(0):0}%</div></div>))}</div></div>}
-<div className="tb"><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:today()});setModal("add");}}>{I.plus} Novo Gasto</button></div>
-<div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th>Descrição</th><th>Valor</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
-{data.expenses.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(<tr key={e.id}><td className="in">{e.desc}</td><td style={{fontWeight:600}}>{fmt(e.amount)}</td><td><span className="tg tg-n">{e.category}</span></td><td style={{color:"var(--text3)"}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td><td><button className="bi" onClick={()=>de(e.id)}>{I.trash}</button></td></tr>))}
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:today(),paid:false});setModal("add");}}>{I.plus} Novo Gasto</button>
+<div style={{display:"flex",gap:4}}>{[{k:"all",l:"Todos"},{k:"pending",l:"Pendentes"},{k:"paid",l:"Pagos"}].map(f=><button key={f.k} className={`btn ${filter===f.k?"bp":"bg"} bs`} onClick={()=>setFilter(f.k)}>{f.l}</button>)}</div>
+</div>
+<div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th style={{width:40}}>Pago</th><th>Descrição</th><th>Valor</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
+{filtered.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(<tr key={e.id} style={{borderLeft:e.paid?"3px solid var(--green)":"3px solid var(--yellow)"}}>
+<td><div style={{width:24,height:24,borderRadius:6,border:`2px solid ${e.paid?"var(--green)":"var(--yellow)"}`,background:e.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .2s"}} onClick={()=>togglePaid(e.id)}>{e.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div></td>
+<td className="in" style={{opacity:e.paid?0.6:1}}>{e.desc}</td>
+<td style={{fontWeight:600,color:e.paid?"var(--green)":"var(--yellow)"}}>{fmt(e.amount)}</td>
+<td><span className="tg tg-n">{e.category}</span></td>
+<td style={{color:"var(--text3)"}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td>
+<td><button className="bi" onClick={()=>de(e.id)}>{I.trash}</button></td>
+</tr>))}
 </tbody></table></div></div>
 {modal&&<Modal title="Novo Gasto" onClose={()=>setModal(null)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><input type="number" step="0.01" value={form.amount||""} onChange={e=>setForm({...form,amount:e.target.value})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div><div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
+<div style={{display:"flex",alignItems:"center",gap:10,marginTop:4,marginBottom:8,cursor:"pointer"}} onClick={()=>setForm({...form,paid:!form.paid})}>
+<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${form.paid?"var(--green)":"var(--yellow)"}`,background:form.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{form.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
+<span style={{fontSize:14,color:form.paid?"var(--green)":"var(--yellow)",fontWeight:500}}>{form.paid?"Já pago":"Ainda não pago (cartão, fatura, etc)"}</span>
+</div>
 <div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={ae}>Salvar</button></div>
 </Modal>}
 {eb&&<Modal title="Editar Orçamento" onClose={()=>setEb(false)}><div className="fg"><label className="fl">Orçamento Mensal</label><input type="number" value={bv} onChange={e=>setBv(e.target.value)} autoFocus/></div><div className="ma"><button className="btn bg" onClick={()=>setEb(false)}>Cancelar</button><button className="btn bp" onClick={sb}>Salvar</button></div></Modal>}
