@@ -65,6 +65,18 @@ const DEFAULT_DATA = {
   ],
   members: ["João", "Maria"],
   budget: 2500,
+  priceHistory: [
+    { id: 1, name: "Arroz", price: 22.90, qty: 5, unit: "kg", date: "2026-01-15" },
+    { id: 2, name: "Arroz", price: 24.50, qty: 5, unit: "kg", date: "2026-02-12" },
+    { id: 3, name: "Arroz", price: 25.90, qty: 5, unit: "kg", date: "2026-03-10" },
+    { id: 4, name: "Feijão Preto", price: 8.90, qty: 1, unit: "kg", date: "2026-01-15" },
+    { id: 5, name: "Feijão Preto", price: 9.50, qty: 1, unit: "kg", date: "2026-02-20" },
+    { id: 6, name: "Feijão Preto", price: 7.90, qty: 1, unit: "kg", date: "2026-03-18" },
+    { id: 7, name: "Leite", price: 5.49, qty: 1, unit: "L", date: "2026-02-05" },
+    { id: 8, name: "Leite", price: 5.99, qty: 1, unit: "L", date: "2026-03-08" },
+    { id: 9, name: "Café", price: 18.90, qty: 500, unit: "g", date: "2026-01-20" },
+    { id: 10, name: "Café", price: 21.50, qty: 500, unit: "g", date: "2026-03-05" },
+  ],
 };
 
 // ─── Helpers ───
@@ -113,6 +125,7 @@ const I = {
   download:<Icon d={<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>}/>,
   upload:<Icon d={<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>}/>,
   sliders:<Icon d={<><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></>}/>,
+  prices:<Icon d={<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>}/>,
 };
 
 // ─── CSS ───
@@ -205,26 +218,38 @@ return(<tr key={item.id}><td className="in">{item.name}</td><td>{item.qty} {item
 </Modal>}</div>);}
 
 // ─── GROCERY ───
-function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});
-const toggle=(id)=>setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));
+function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[priceVal,setPriceVal]=useState("");
+const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
+const toggle=(id)=>{const item=data.grocery.find(i=>i.id===id);if(item&&!item.checked){setPriceModal(item);setPriceVal(item.price||"");}else{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));}};
+const confirmCheck=()=>{if(!priceModal)return;const price=Number(priceVal)||0;setData(d=>{const newPH=price>0?[...d.priceHistory,{id:Date.now(),name:priceModal.name,price,qty:priceModal.qty,unit:priceModal.unit,date:today()}]:d.priceHistory;return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,price}:i),priceHistory:newPH};});if(price>0)toast(`${priceModal.name}: ${fmt(price)} registrado`);else toast("Item marcado");setPriceModal(null);setPriceVal("");};
+const skipPrice=()=>{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true}:i)}));toast("Item marcado");setPriceModal(null);setPriceVal("");};
 const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
-const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0]}]}));toast("Adicionado");setModal(false);};
+const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:Number(form.price)||0}]}));toast("Adicionado");setModal(false);};
 const toP=(item)=>{setData(d=>({...d,pantry:[...d.pantry,{id:Date.now(),name:item.name,qty:item.qty,unit:item.unit,location:c.locations[0]||"Despensa",expiry:"",category:item.category}],grocery:d.grocery.filter(i=>i.id!==item.id)}));toast(`"${item.name}" → despensa`);};
 const clr=()=>{data.grocery.filter(i=>i.checked).forEach(toP);};
 const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
+// Get last known price for an item
+const lastPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.price||null;};
 return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados</div></div>
-<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setModal(true);}}>{I.plus} Adicionar</button>{done.length>0&&<button className="btn bg" onClick={clr}>Comprados → Despensa</button>}</div>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0],price:""});setModal(true);}}>{I.plus} Adicionar</button>{done.length>0&&<button className="btn bg" onClick={clr}>Comprados → Despensa</button>}</div>
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
-{pend.map(i=>(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span><span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>))}
+{pend.map(i=>{const lp=lastPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}<span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>);})}
 {done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span></div>}
-{done.map(i=>(<div className="cr" key={i.id} style={{opacity:.5}}><div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div><span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>))}
+{done.map(i=>(<div className="cr" key={i.id} style={{opacity:.5}}><div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div><span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{i.price>0&&<span style={{fontSize:12,color:"var(--green)"}}>{fmt(i.price)}</span>}<button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>))}
 </div>
 {modal&&<Modal title="Novo Item" onClose={()=>setModal(false)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Nome</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Unidade</label><select value={form.unit||c.units[0]} onChange={e=>setForm({...form,unit:e.target.value})}>{c.units.map(u=><option key={u}>{u}</option>)}</select></div>
 <div className="fg"><label className="fl">Categoria</label><select value={form.category||c.pantryCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.pantryCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div></div>
 <div className="ma"><button className="btn bg" onClick={()=>setModal(false)}>Cancelar</button><button className="btn bp" onClick={add}>Adicionar</button></div>
-</Modal>}</div>);}
+</Modal>}
+{priceModal&&<Modal title={`Preço: ${priceModal.name}`} onClose={()=>{skipPrice();}}>
+<div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Quanto pagou neste item? (opcional — ajuda a rastrear preços)</div>
+<div className="fg"><label className="fl">Preço pago</label><input type="number" step="0.01" value={priceVal} onChange={e=>setPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
+{lastPrice(priceModal.name)&&<div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Último preço registrado: {fmt(lastPrice(priceModal.name))}</div>}
+<div className="ma"><button className="btn bg" onClick={skipPrice}>Pular</button><button className="btn bp" onClick={confirmCheck}>Registrar</button></div>
+</Modal>}
+</div>);}
 
 // ─── CHORES ───
 function ChoresPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(null);const[form,setForm]=useState({});
@@ -336,6 +361,61 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 {eb&&<Modal title="Editar Orçamento" onClose={()=>setEb(false)}><div className="fg"><label className="fl">Orçamento Mensal</label><input type="number" value={bv} onChange={e=>setBv(e.target.value)} autoFocus/></div><div className="ma"><button className="btn bg" onClick={()=>setEb(false)}>Cancelar</button><button className="btn bp" onClick={sb}>Salvar</button></div></Modal>}
 </div>);}
 
+// ─── PRICES ───
+function PricesPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[search,setSearch]=useState("");const[modal,setModal]=useState(null);const[form,setForm]=useState({});
+const ph=data.priceHistory||[];
+// Group by product name
+const grouped={};ph.forEach(p=>{if(!grouped[p.name])grouped[p.name]=[];grouped[p.name].push(p);});
+Object.values(grouped).forEach(arr=>arr.sort((a,b)=>a.date.localeCompare(b.date)));
+// Get unique product names sorted
+const products=Object.keys(grouped).filter(n=>!search||n.toLowerCase().includes(search.toLowerCase())).sort();
+// Stats
+const getStats=(name)=>{const arr=grouped[name]||[];if(arr.length===0)return{last:0,prev:0,change:0,count:0,min:0,max:0,avg:0};const last=arr[arr.length-1].price;const prev=arr.length>1?arr[arr.length-2].price:last;const change=prev>0?((last-prev)/prev)*100:0;const prices=arr.map(p=>p.price);return{last,prev,change,count:arr.length,min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((a,b)=>a+b,0)/prices.length};};
+// Mini sparkline SVG
+const Spark=({data:pts,width=120,height=32})=>{if(pts.length<2)return<span style={{fontSize:11,color:"var(--text3)"}}>1 registro</span>;const prices=pts.map(p=>p.price);const mn=Math.min(...prices);const mx=Math.max(...prices);const range=mx-mn||1;const points=prices.map((p,i)=>`${(i/(prices.length-1))*width},${height-((p-mn)/range)*height}`).join(" ");const rising=prices[prices.length-1]>=prices[0];return(<svg width={width} height={height} style={{display:"block"}}><polyline points={points} fill="none" stroke={rising?"var(--red)":"var(--green)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>{prices.map((p,i)=>(<circle key={i} cx={(i/(prices.length-1))*width} cy={height-((p-mn)/range)*height} r="3" fill={i===prices.length-1?"var(--accent)":rising?"var(--red)":"var(--green)"} opacity={i===prices.length-1?1:0.5}/>))}</svg>);};
+// Add manual price entry
+const addPrice=()=>{if(!form.name||!form.price)return;setData(d=>({...d,priceHistory:[...(d.priceHistory||[]),{id:Date.now(),name:form.name,price:Number(form.price),qty:Number(form.qty)||1,unit:form.unit||"un",date:form.date||today()}]}));toast("Preço registrado");setModal(null);};
+const delProduct=(name)=>{if(!confirm(`Apagar todo o histórico de "${name}"?`))return;setData(d=>({...d,priceHistory:(d.priceHistory||[]).filter(p=>p.name!==name)}));toast("Histórico removido");};
+// Total items tracked
+const totalProducts=Object.keys(grouped).length;const totalEntries=ph.length;
+// Products with biggest increase
+const alerts=products.map(n=>({name:n,...getStats(n)})).filter(s=>s.count>=2&&s.change>0).sort((a,b)=>b.change-a.change).slice(0,3);
+return(<div><div className="ph"><div className="pt">Preços</div><div className="ps">Histórico e evolução de preços dos itens</div></div>
+<div className="sg">
+<div className="sc ac"><div className="sl">Produtos Rastreados</div><div className="sv">{totalProducts}</div><div className="sd">{totalEntries} registros no total</div></div>
+{alerts.length>0&&<div className="sc rd"><div className="sl">Maior Alta</div><div className="sv" style={{color:"var(--red)",fontSize:22}}>{alerts[0].name}</div><div className="sd">+{alerts[0].change.toFixed(1)}% ({fmt(alerts[0].prev)} → {fmt(alerts[0].last)})</div></div>}
+{(()=>{const drops=products.map(n=>({name:n,...getStats(n)})).filter(s=>s.count>=2&&s.change<0).sort((a,b)=>a.change-b.change);return drops.length>0?<div className="sc gn"><div className="sl">Maior Queda</div><div className="sv" style={{color:"var(--green)",fontSize:22}}>{drops[0].name}</div><div className="sd">{drops[0].change.toFixed(1)}% ({fmt(drops[0].prev)} → {fmt(drops[0].last)})</div></div>:null;})()}
+</div>
+<div className="tb"><div className="sb-i" style={{marginBottom:0,flex:1,maxWidth:320}}>{I.search}<input placeholder="Buscar produto..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+<div className="tr"><button className="btn bp" onClick={()=>{setForm({name:"",price:"",qty:"",unit:c.units[0]||"un",date:today()});setModal("add");}}>{I.plus} Registrar Preço</button></div></div>
+{products.length===0&&<div className="card" style={{textAlign:"center",padding:40,color:"var(--text3)"}}>{search?"Nenhum produto encontrado":"Nenhum preço registrado ainda. Marque itens como comprados na Lista de Compras ou registre manualmente."}</div>}
+{products.map(name=>{const stats=getStats(name);const arr=grouped[name];return(
+<div className="card" key={name} style={{padding:20}}>
+<div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+<div style={{flex:1,minWidth:150}}>
+<div style={{fontSize:16,fontWeight:600,color:"var(--text)",marginBottom:4}}>{name}</div>
+<div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+<span style={{fontSize:20,fontWeight:700}}>{fmt(stats.last)}</span>
+{stats.count>=2&&<span style={{fontSize:13,fontWeight:600,color:stats.change>0?"var(--red)":stats.change<0?"var(--green)":"var(--text3)",background:stats.change>0?"var(--red-bg)":stats.change<0?"var(--green-bg)":"var(--bg4)",padding:"2px 10px",borderRadius:12}}>{stats.change>0?"+":""}{stats.change.toFixed(1)}%</span>}
+<span style={{fontSize:11,color:"var(--text3)"}}>{stats.count} registro{stats.count>1?"s":""}</span>
+</div>
+{stats.count>=2&&<div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Mín: {fmt(stats.min)} · Máx: {fmt(stats.max)} · Média: {fmt(stats.avg)}</div>}
+</div>
+<div style={{minWidth:130}}><Spark data={arr}/></div>
+<button className="bi" onClick={()=>delProduct(name)} title="Apagar histórico">{I.trash}</button>
+</div>
+{arr.length>1&&<div style={{marginTop:12,display:"flex",gap:6,flexWrap:"wrap"}}>{arr.map((p,i)=><div key={p.id} style={{fontSize:11,color:"var(--text3)",background:"var(--bg3)",padding:"4px 10px",borderRadius:8}}><span style={{color:"var(--text2)",fontWeight:600}}>{fmt(p.price)}</span> <span>{new Date(p.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span></div>)}</div>}
+</div>);})}
+{modal&&<Modal title="Registrar Preço" onClose={()=>setModal(null)}>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Produto</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ex: Arroz" autoFocus list="price-products"/><datalist id="price-products">{[...new Set(ph.map(p=>p.name))].map(n=><option key={n} value={n}/>)}</datalist></div>
+<div className="fg"><label className="fl">Preço</label><input type="number" step="0.01" value={form.price||""} onChange={e=>setForm({...form,price:e.target.value})} placeholder="0.00"/></div></div>
+<div className="fr"><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div>
+<div className="fg"><label className="fl">Unidade</label><select value={form.unit||c.units[0]} onChange={e=>setForm({...form,unit:e.target.value})}>{c.units.map(u=><option key={u}>{u}</option>)}</select></div>
+<div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
+<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={addPrice}>Registrar</button></div>
+</Modal>}
+</div>);}
+
 // ─── SETTINGS ───
 function SettingsPage({data,setData,toast}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
 const uc=(k,v)=>setData(d=>({...d,config:{...d.config,[k]:v}}));
@@ -385,11 +465,11 @@ const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p
 const toast=useCallback((m)=>{setTm(m);setTimeout(()=>setTm(""),2500);},[]);
 const c=data.config;const tv=THEMES[c.theme]||THEMES.dark;const ac=c.accentColor||"#F0A050";
 const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.expiry);return(d<=w&&d>=0)||d<0;}).length;const pg=data.grocery.filter(i=>!i.checked).length;
-const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"settings",label:"Configurações",icon:I.settings}];
+const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"settings",label:"Configurações",icon:I.settings}];
 const go=(id)=>{setPage(id);setSo(false);};
 return(<><style>{getCSS(tv,ac)}</style><div className="app">
-<div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><svg width="22" height="22" viewBox="0 0 64 64" fill="none" style={{marginLeft:10}}><path d="M20 4L36 4L20 32L28 32L12 60L20 60L4 32L12 32L20 4Z" fill={ac}/><path d="M32 4L48 4L32 32L40 32L24 60L32 60L16 32L24 32L32 4Z" fill={ac} opacity="0.5"/></svg><span style={{marginLeft:6,fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span></div>
-<nav className={`sb ${so?"open":""}`}><div className="sb-h"><div style={{display:"flex",alignItems:"center",gap:10}}><svg width="28" height="28" viewBox="0 0 64 64" fill="none"><path d="M20 4L36 4L20 32L28 32L12 60L20 60L4 32L12 32L20 4Z" fill={ac}/><path d="M32 4L48 4L32 32L40 32L24 60L32 60L16 32L24 32L32 4Z" fill={ac} opacity="0.5"/></svg><div className="logo">{c.houseName}</div></div><div className="logo-s">gestão doméstica</div></div><div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
+<div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span></div>
+<nav className={`sb ${so?"open":""}`}><div className="sb-h"><div className="logo">{c.houseName}</div><div className="logo-s">gestão doméstica</div></div><div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
 <div className="sb-f"><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{user?user.displayName||user.email:data.members.join(", ")}</span>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
 {so&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}} onClick={()=>setSo(false)}/>}
 <main className="mc">
@@ -399,5 +479,6 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="chores"&&<ChoresPage data={data} setData={setData} toast={toast}/>}
 {page==="meals"&&<MealsPage data={data} setData={setData} toast={toast}/>}
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast}/>}
+{page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast}/>}
 </main></div><Toast message={tm}/></>);}
