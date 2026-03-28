@@ -519,7 +519,8 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 </div>);}
 
 // ─── SETTINGS ───
-function SettingsPage({data,setData,toast,houseCode,houseInfo,leaveHouse,refreshHouseInfo}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
+function SettingsPage({data,setData,toast,houseCode,houseInfo,leaveHouse,refreshHouseInfo,userPrefs,setUserPrefs}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
+const myTheme=userPrefs?.theme||c.theme||"dark";const myAccent=userPrefs?.accentColor||c.accentColor||"#F0A050";
 const uc=(k,v)=>setData(d=>({...d,config:{...d.config,[k]:v}}));
 const al=(k,v)=>{if(!v.trim()||c[k].includes(v.trim()))return;uc(k,[...c[k],v.trim()]);toast("Adicionado");};
 const rl=(k,v)=>{uc(k,c[k].filter(x=>x!==v));toast("Removido");};
@@ -559,8 +560,10 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 </div>
 </>}
 
-{tab==="aparencia"&&<><div className="card"><div className="sst">{I.palette} Tema</div><div className="thg">{Object.entries(THEMES).map(([k,v])=>(<div key={k} className={`thc ${c.theme===k?"sel":""}`} style={{background:v["--bg2"],color:v["--text"],border:`2px solid ${c.theme===k?c.accentColor:v["--border"]}`}} onClick={()=>uc("theme",k)}><div style={{width:"100%",height:24,borderRadius:4,marginBottom:8,background:`linear-gradient(135deg,${v["--bg"]},${v["--bg3"]})`}}/>{k.charAt(0).toUpperCase()+k.slice(1)}</div>))}</div></div>
-<div className="card"><div className="sst">✦ Cor de Destaque</div><div className="cg">{ACCENT_COLORS.map(col=>(<div key={col} className={`cd ${c.accentColor===col?"sel":""}`} style={{background:col}} onClick={()=>uc("accentColor",col)}/>))}</div><div style={{marginTop:12,display:"flex",alignItems:"center",gap:8}}><label className="fl" style={{margin:0}}>Personalizada:</label><input type="color" value={c.accentColor} onChange={e=>uc("accentColor",e.target.value)} style={{width:40,height:32,padding:2,cursor:"pointer"}}/><span style={{fontSize:12,color:"var(--text3)"}}>{c.accentColor}</span></div></div></>}
+{tab==="aparencia"&&<>
+<div className="card" style={{background:"var(--accent-glow)",borderColor:"var(--accent)",marginBottom:16}}><div style={{fontSize:13,color:"var(--text2)",lineHeight:1.6}}>🎨 <strong style={{color:"var(--text)"}}>As configurações de aparência são individuais</strong> — cada pessoa da casa pode ter seu próprio tema e cor, sem afetar os outros.</div></div>
+<div className="card"><div className="sst">{I.palette} Tema</div><div className="thg">{Object.entries(THEMES).map(([k,v])=>(<div key={k} className={`thc ${myTheme===k?"sel":""}`} style={{background:v["--bg2"],color:v["--text"],border:`2px solid ${myTheme===k?myAccent:v["--border"]}`}} onClick={()=>{setUserPrefs(p=>({...p,theme:k}));toast("Tema atualizado");}}><div style={{width:"100%",height:24,borderRadius:4,marginBottom:8,background:`linear-gradient(135deg,${v["--bg"]},${v["--bg3"]})`}}/>{k.charAt(0).toUpperCase()+k.slice(1)}</div>))}</div></div>
+<div className="card"><div className="sst">✦ Cor de Destaque</div><div className="cg">{ACCENT_COLORS.map(col=>(<div key={col} className={`cd ${myAccent===col?"sel":""}`} style={{background:col}} onClick={()=>{setUserPrefs(p=>({...p,accentColor:col}));toast("Cor atualizada");}}/>))}</div><div style={{marginTop:12,display:"flex",alignItems:"center",gap:8}}><label className="fl" style={{margin:0}}>Personalizada:</label><input type="color" value={myAccent} onChange={e=>{setUserPrefs(p=>({...p,accentColor:e.target.value}));}} style={{width:40,height:32,padding:2,cursor:"pointer"}}/><span style={{fontSize:12,color:"var(--text3)"}}>{myAccent}</span></div></div></>}
 
 {tab==="categorias"&&<><div className="card"><div className="sst">{I.pantry} Categorias da Despensa</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Usadas na despensa e lista de compras</p><TagEditor items={c.pantryCategories} onAdd={v=>al("pantryCategories",v)} onRemove={v=>rl("pantryCategories",v)}/></div>
 <div className="card"><div className="sst">{I.budget} Categorias de Gastos</div><TagEditor items={c.expenseCategories} onAdd={v=>al("expenseCategories",v)} onRemove={v=>rl("expenseCategories",v)}/></div></>}
@@ -771,18 +774,30 @@ Baixar App
 }
 
 // ─── MAIN APP ───
-export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo }){
+export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo, saveUserPrefs, loadUserPrefs }){
 const installHook=useInstallPrompt();
 const[showTour,setShowTour]=useState(()=>{try{return!localStorage.getItem("stockly-tour-done");}catch{return true;}});
 const[data,setDataRaw]=useState(()=>{const l=load();const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
+const[userPrefs,setUserPrefsRaw]=useState(()=>{try{const p=localStorage.getItem("stockly-user-prefs");return p?JSON.parse(p):{};}catch{return{};}});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
+// Load house data from Firebase
 useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated);}});}},[user]);
 
+// Load individual prefs from Firebase
+useEffect(()=>{if(user&&loadUserPrefs){loadUserPrefs().then(p=>{if(p){setUserPrefsRaw(p);try{localStorage.setItem("stockly-user-prefs",JSON.stringify(p));}catch{}}});}},[user]);
+
 const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user]);
+
+const setUserPrefs=useCallback((updater)=>{setUserPrefsRaw(prev=>{const n=typeof updater==="function"?updater(prev):updater;try{localStorage.setItem("stockly-user-prefs",JSON.stringify(n));}catch{}if(user&&saveUserPrefs)saveUserPrefs(n);return n;});},[user]);
+
 const toast=useCallback((m)=>{setTm(m);setTimeout(()=>setTm(""),2500);},[]);
 const finishTour=()=>{setShowTour(false);try{localStorage.setItem("stockly-tour-done","1");}catch{}};
-const c=data.config;const tv=THEMES[c.theme]||THEMES.dark;const ac=c.accentColor||"#F0A050";
+const c=data.config;
+// Theme and accent come from INDIVIDUAL prefs, fallback to house config
+const myTheme=userPrefs.theme||c.theme||"dark";
+const myAccent=userPrefs.accentColor||c.accentColor||"#F0A050";
+const tv=THEMES[myTheme]||THEMES.dark;const ac=myAccent;
 const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.expiry);return(d<=w&&d>=0)||d<0;}).length;const pg=data.grocery.filter(i=>!i.checked).length;
 const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"help",label:"Ajuda",icon:I.help},{id:"settings",label:"Configurações",icon:I.settings}];
 const go=(id)=>{setPage(id);setSo(false);};
@@ -801,5 +816,5 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="help"&&<HelpPage goTo={go}/>}
-{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo}/>}
+{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs}/>}
 </main></div>{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm}/></>);}
