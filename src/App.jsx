@@ -554,12 +554,62 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="ct">Sobre</div><p style={{fontSize:13,color:"var(--text2)",lineHeight:1.7}}>Lar Centro — Hub completo de gestão doméstica. 100% customizável.</p><p style={{fontSize:12,color:"var(--text3)",marginTop:12}}>v2.0</p></div></>}
 </div>);}
 
+// ─── PWA Install Hook (shared between banner and sidebar) ───
+function useInstallPrompt(){
+const[prompt,setPrompt]=useState(null);const[installed,setInstalled]=useState(false);const[isIOS,setIsIOS]=useState(false);
+useEffect(()=>{
+if(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches){setInstalled(true);return;}
+if(window.navigator.standalone){setInstalled(true);return;}
+setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
+const h=(e)=>{e.preventDefault();setPrompt(e);};
+window.addEventListener("beforeinstallprompt",h);
+window.addEventListener("appinstalled",()=>setInstalled(true));
+return()=>window.removeEventListener("beforeinstallprompt",h);
+},[]);
+const doInstall=async()=>{if(prompt){prompt.prompt();const r=await prompt.userChoice;if(r.outcome==="accepted"){setInstalled(true);setPrompt(null);}}};
+return{prompt,installed,isIOS,doInstall};
+}
+
+// ─── PWA Install Banner (bottom popup) ───
+function InstallBanner({installHook}){
+const{prompt,installed,isIOS,doInstall}=installHook;
+const[show,setShow]=useState(false);const[dismissed,setDismissed]=useState(()=>{try{return localStorage.getItem("stockly-install-dismissed")==="1";}catch{return false;}});
+useEffect(()=>{if(installed||dismissed)return;if(prompt){setShow(true);return;}if(isIOS){setTimeout(()=>setShow(true),2000);}},[prompt,installed,dismissed,isIOS]);
+const dismiss=()=>{setShow(false);setDismissed(true);try{localStorage.setItem("stockly-install-dismissed","1");}catch{}};
+if(!show||installed)return null;
+return(<div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:250,padding:16,animation:"su .3s ease"}}>
+<div style={{background:"linear-gradient(135deg,#1A1F2B,#141820)",border:"1px solid #2A3040",borderRadius:16,padding:20,maxWidth:480,margin:"0 auto",boxShadow:"0 -4px 32px rgba(0,0,0,.5)",display:"flex",alignItems:"center",gap:16}}>
+<svg width="44" height="44" viewBox="0 0 64 64" fill="none" style={{flexShrink:0}}><path d="M20 4L36 4L20 32L28 32L12 60L20 60L4 32L12 32L20 4Z" fill="#F0A050"/><path d="M32 4L48 4L32 32L40 32L24 60L32 60L16 32L24 32L32 4Z" fill="#F0A050" opacity="0.5"/></svg>
+<div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:"#E8EAF0",marginBottom:4}}>Instalar Stockly</div><div style={{fontSize:12,color:"#9CA3B8",lineHeight:1.4}}>{isIOS?"Toque em compartilhar ↑ e \"Adicionar à Tela de Início\"":"Instale como app no seu celular!"}</div></div>
+<div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+{!isIOS&&prompt&&<button onClick={()=>{doInstall();setShow(false);}} style={{padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:700,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#F0A050,#E88D3A)",color:"#fff",fontFamily:"'Outfit',sans-serif",whiteSpace:"nowrap"}}>Instalar</button>}
+<button onClick={dismiss} style={{padding:"6px 12px",borderRadius:6,fontSize:11,fontWeight:500,border:"1px solid #2A3040",cursor:"pointer",background:"transparent",color:"#6B7390",fontFamily:"'Outfit',sans-serif"}}>Agora não</button>
+</div></div></div>);
+}
+
+// ─── Sidebar Install Button (always visible until installed) ───
+function SidebarInstallBtn({installHook}){
+const{prompt,installed,isIOS,doInstall}=installHook;
+const[showTip,setShowTip]=useState(false);
+if(installed)return null;
+const handleClick=()=>{if(prompt){doInstall();}else{setShowTip(true);setTimeout(()=>setShowTip(false),5000);}};
+return(<div style={{padding:"0 12px 8px",position:"relative"}}>
+<button onClick={handleClick} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1px dashed var(--accent)",background:"var(--accent-glow)",color:"var(--accent)",fontSize:13,fontWeight:600,fontFamily:"'Outfit',sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .2s"}}>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+Baixar App
+</button>
+{showTip&&<div style={{position:"absolute",bottom:"100%",left:12,right:12,marginBottom:8,padding:"10px 14px",background:"var(--bg3)",border:"1px solid var(--border2)",borderRadius:10,fontSize:12,color:"var(--text2)",lineHeight:1.5,boxShadow:"var(--shadow)",animation:"su .2s ease",zIndex:10}}>
+{isIOS?"No Safari, toque no botão de compartilhar ↑ e depois \"Adicionar à Tela de Início\"":"Clique nos 3 pontinhos ⋮ do navegador e selecione \"Instalar app\" ou \"Adicionar à tela inicial\""}
+</div>}
+</div>);
+}
+
 // ─── MAIN APP ───
 export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo }){
+const installHook=useInstallPrompt();
 const[data,setDataRaw]=useState(()=>{const l=load();const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
-// Load from Firebase on start (if available)
 useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated);}});}},[user]);
 
 const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user]);
@@ -571,6 +621,7 @@ const go=(id)=>{setPage(id);setSo(false);};
 return(<><style>{getCSS(tv,ac)}</style><div className="app">
 <div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span></div>
 <nav className={`sb ${so?"open":""}`}><div className="sb-h"><div className="logo">{c.houseName}</div><div className="logo-s">gestão doméstica</div></div><div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
+<SidebarInstallBtn installHook={installHook}/>
 <div className="sb-f"><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{user?user.displayName||user.email:data.members.join(", ")}</span>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
 {so&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}} onClick={()=>setSo(false)}/>}
 <main className="mc">
@@ -582,4 +633,4 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo}/>}
-</main></div><Toast message={tm}/></>);}
+</main></div><InstallBanner installHook={installHook}/><Toast message={tm}/></>);}
