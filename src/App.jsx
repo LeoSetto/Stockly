@@ -158,6 +158,7 @@ const I = {
   upload:<Icon d={<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>}/>,
   sliders:<Icon d={<><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></>}/>,
   prices:<Icon d={<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>}/>,
+  help:<Icon d={<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>}/>,
 };
 
 // ─── CSS ───
@@ -577,6 +578,148 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="ct">Sobre</div><p style={{fontSize:13,color:"var(--text2)",lineHeight:1.7}}>Lar Centro — Hub completo de gestão doméstica. 100% customizável.</p><p style={{fontSize:12,color:"var(--text3)",marginTop:12}}>v2.0</p></div></>}
 </div>);}
 
+// ─── WELCOME TOUR ───
+const TOUR_STEPS=[
+{icon:"👋",title:"Bem-vindo ao Stockly!",text:"Seu novo hub de gestão doméstica. Vou te mostrar rapidinho como tudo funciona. Leva menos de 1 minuto!"},
+{icon:"📦",title:"Despensa",text:"Aqui você cadastra tudo que tem em casa — comida, produtos de limpeza, higiene... Coloque o nome, quantidade, onde está guardado (geladeira, armário...) e a validade. O app avisa quando algo está perto de vencer!"},
+{icon:"🛒",title:"Lista de Compras",text:"Monte sua lista de compras aqui. Quando estiver no mercado, marque os itens como comprados — o app pergunta o preço e calcula o total. No final, clique em 'Finalizar Compra' e tudo vai automaticamente para a Despensa e as Finanças."},
+{icon:"✅",title:"Tarefas",text:"Organize a limpeza e manutenção da casa. Crie tarefas, defina quem é responsável, a frequência (diário, semanal...) e marque quando foi feita. O app mostra o que está atrasado."},
+{icon:"🍽️",title:"Cardápio",text:"Planeje as refeições da semana. Clique no dia e na refeição para definir o que vai cozinhar. Você pode personalizar os dias e tipos de refeição (café, almoço, lanche, jantar...)."},
+{icon:"💰",title:"Finanças",text:"Controle os gastos da casa. Cada gasto tem categoria, cartão de pagamento e status (pago ou pendente). Compras do mercado aparecem aqui automaticamente. Defina um orçamento mensal e acompanhe o quanto já gastou."},
+{icon:"📈",title:"Preços",text:"Acompanhe a evolução dos preços dos produtos ao longo do tempo. O app registra automaticamente quando você compra algo e mostra gráficos de variação — sabe aquele arroz que subiu? Aqui você vê!"},
+{icon:"⚙️",title:"Tudo é customizável!",text:"Vá em Configurações para personalizar: nome da casa, tema, cores, categorias, cômodos, cartões de pagamento, tipos de refeição... Tudo pode ser mudado do seu jeito."},
+{icon:"👨‍👩‍👧‍👦",title:"Compartilhe com a família",text:"Em Configurações → Casa, você encontra o código da sua casa. Mande para sua família — cada pessoa faz login com a própria conta e digita o código. Todos compartilham os mesmos dados!"},
+{icon:"🚀",title:"Pronto para começar!",text:"É isso! Comece adicionando itens à Despensa ou montando sua lista de compras. Se precisar de ajuda, acesse a seção 'Ajuda' no menu lateral a qualquer momento."},
+];
+
+function WelcomeTour({onFinish}){
+const[step,setStep]=useState(0);
+const s=TOUR_STEPS[step];const total=TOUR_STEPS.length;const pct=((step+1)/total)*100;
+return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16,animation:"fi .2s ease"}}>
+<div style={{background:"#141820",border:"1px solid #2A3040",borderRadius:20,padding:0,width:"100%",maxWidth:440,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,.5)",animation:"su .3s ease"}}>
+{/* Progress bar */}
+<div style={{height:4,background:"#1A1F2B"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#F0A050,#FFD700)",borderRadius:4,transition:"width .3s ease"}}/></div>
+<div style={{padding:"32px 32px 28px",textAlign:"center"}}>
+{/* Icon */}
+<div style={{fontSize:48,marginBottom:16,lineHeight:1}}>{s.icon}</div>
+{/* Title */}
+<div style={{fontSize:22,fontWeight:800,color:"#E8EAF0",marginBottom:12,fontFamily:"'Outfit',sans-serif"}}>{s.title}</div>
+{/* Text */}
+<div style={{fontSize:14,color:"#9CA3B8",lineHeight:1.7,marginBottom:24,maxWidth:360,margin:"0 auto 24px"}}>{s.text}</div>
+{/* Step indicator */}
+<div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:20}}>
+{TOUR_STEPS.map((_,i)=>(<div key={i} style={{width:i===step?24:8,height:8,borderRadius:4,background:i===step?"#F0A050":i<step?"#F0A05066":"#2A3040",transition:"all .3s",cursor:"pointer"}} onClick={()=>setStep(i)}/>))}
+</div>
+{/* Buttons */}
+<div style={{display:"flex",gap:10,justifyContent:"center"}}>
+{step>0&&<button onClick={()=>setStep(step-1)} style={{padding:"10px 20px",borderRadius:8,fontSize:14,fontWeight:600,border:"1px solid #2A3040",background:"transparent",color:"#9CA3B8",cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Anterior</button>}
+{step<total-1?<button onClick={()=>setStep(step+1)} style={{padding:"10px 28px",borderRadius:8,fontSize:14,fontWeight:700,border:"none",background:"linear-gradient(135deg,#F0A050,#E88D3A)",color:"#fff",cursor:"pointer",fontFamily:"'Outfit',sans-serif",boxShadow:"0 2px 12px rgba(240,160,80,.3)"}}>Próximo</button>:
+<button onClick={onFinish} style={{padding:"10px 28px",borderRadius:8,fontSize:14,fontWeight:700,border:"none",background:"linear-gradient(135deg,#4ADE80,#22C55E)",color:"#fff",cursor:"pointer",fontFamily:"'Outfit',sans-serif",boxShadow:"0 2px 12px rgba(74,222,128,.3)"}}>Começar! 🎉</button>}
+</div>
+{step<total-1&&<button onClick={onFinish} style={{marginTop:12,background:"none",border:"none",color:"#6B7390",fontSize:12,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Pular tour</button>}
+</div></div></div>);
+}
+
+// ─── HELP PAGE ───
+function HelpPage({goTo}){
+const sections=[
+{id:"painel",icon:"🏠",title:"Painel",color:"#F0A050",content:[
+"O Painel é sua visão geral. Mostra tudo de uma vez: quantos itens tem na despensa, o que está vencendo, tarefas pendentes, gastos do mês e próximas refeições.",
+"Os cards coloridos no topo mostram os números mais importantes. Se algo precisa de atenção (itens vencendo, tarefas atrasadas), aparece em vermelho ou amarelo.",
+"Use o Painel para ter uma noção rápida de como está a organização da sua casa.",
+]},
+{id:"despensa",icon:"📦",title:"Despensa",color:"#60A5FA",content:[
+"A Despensa é o inventário de tudo que você tem em casa. Comida, limpeza, higiene — tudo entra aqui.",
+"Para adicionar um item: clique no botão '+ Adicionar', preencha o nome, quantidade, unidade (kg, un, pacote...), onde está guardado (geladeira, despensa, freezer...) e a data de validade.",
+"Use os filtros de Local e Categoria para encontrar itens rápido. A busca funciona por nome.",
+"Quando um item está acabando, clique no ícone de sacola para mandá-lo direto para a Lista de Compras.",
+"Itens perto de vencer aparecem com status amarelo/vermelho e são destacados no Painel.",
+]},
+{id:"compras",icon:"🛒",title:"Lista de Compras",color:"#4ADE80",content:[
+"Monte sua lista antes de ir ao mercado. Clique em '+ Adicionar' e coloque o nome, quantidade e categoria.",
+"No mercado, toque no item para marcá-lo como comprado. O app pergunta o preço unitário — é opcional, mas ajuda a acompanhar os preços ao longo do tempo.",
+"O preço unitário é multiplicado pela quantidade automaticamente. O total da compra aparece no topo.",
+"Quando terminar as compras, clique em 'Finalizar Compra'. Vai pedir a forma de pagamento (Pix, cartão...) e se já foi pago. Depois disso, os itens vão para a Despensa e o total aparece nas Finanças.",
+"Na parte de baixo tem o histórico das suas últimas idas ao mercado, com data, total e itens.",
+]},
+{id:"tarefas",icon:"✅",title:"Tarefas da Casa",color:"#FBBF24",content:[
+"Organize quem faz o quê na casa. Cada tarefa tem: nome, cômodo, responsável, frequência (diário, semanal...) e nível de esforço.",
+"O app calcula automaticamente se uma tarefa está em dia, pendente ou atrasada, baseado na frequência e na última vez que foi feita.",
+"Para marcar como feita, clique no botão 'Feito'. A data atualiza e o status volta para 'Em dia'.",
+"Se morarem mais pessoas na casa, o app mostra quantas tarefas cada um tem atribuídas.",
+]},
+{id:"cardapio",icon:"🍽️",title:"Cardápio Semanal",color:"#A78BFA",content:[
+"Planeje o que vai cozinhar na semana. Cada dia mostra os tipos de refeição (café, almoço, lanche, jantar).",
+"Clique em qualquer slot para adicionar ou editar a receita/prato do dia.",
+"Clique em 'Editar dias e refeições' para personalizar: adicionar novos dias (ex: 'Feriado'), novos tipos de refeição (ex: 'Brunch', 'Ceia'), renomear e reordenar.",
+"As próximas refeições também aparecem no Painel para consulta rápida.",
+]},
+{id:"financas",icon:"💰",title:"Finanças",color:"#F87171",content:[
+"Controle todos os gastos da casa. Cada gasto tem: descrição, valor, categoria, cartão de pagamento, data e status (pago ou pendente).",
+"O checkbox na esquerda indica se já foi pago (verde) ou está pendente (amarelo). Clique nele para alternar.",
+"Compras finalizadas na Lista de Compras aparecem aqui automaticamente!",
+"Use os filtros 'Todos', 'Pendentes' e 'Pagos' para ver só o que precisa.",
+"Defina um orçamento mensal e acompanhe a barra de progresso. Fica verde quando está bem, amarelo quando está apertando e vermelho quando estourou.",
+"Para editar um gasto, clique no ícone de lápis. Pode mudar tudo: nome, valor, categoria, cartão, data e status.",
+]},
+{id:"precos",icon:"📈",title:"Preços",color:"#34D399",content:[
+"Aqui você vê a evolução dos preços de cada produto ao longo do tempo.",
+"Sempre que você registra um preço na Lista de Compras, ele aparece aqui automaticamente. Também pode registrar preços manualmente.",
+"Cada produto mostra: preço atual, variação percentual (vermelho = subiu, verde = baixou), mini-gráfico e histórico completo.",
+"Os cards no topo destacam o produto com maior alta e maior queda de preço.",
+"Clique em qualquer registro para editar o preço ou excluir.",
+]},
+{id:"config",icon:"⚙️",title:"Configurações",color:"#818CF8",content:[
+"Tudo no Stockly é customizável. As configurações são divididas em abas:",
+"Geral — nome da casa, membros, moeda (Real, Dólar...), formato de data e dias de antecedência para alertas de validade.",
+"Casa — código da casa para compartilhar com a família, lista de membros e opção de sair.",
+"Aparência — 6 temas visuais e 12+ cores de destaque. Escolha a combinação que mais gosta.",
+"Categorias — adicione ou remova categorias da despensa e de gastos.",
+"Listas — customize locais de armazenamento, unidades de medida, cômodos, frequências de tarefas, cartões de pagamento, dias do cardápio e tipos de refeição.",
+"Dados — exporte backup completo em JSON ou importe de um arquivo. Opção de resetar tudo.",
+]},
+];
+return(<div><div className="ph"><div className="pt">Ajuda</div><div className="ps">Tudo que você precisa saber sobre o Stockly</div></div>
+{/* Quick start */}
+<div className="card" style={{background:"var(--accent-glow)",borderColor:"var(--accent)"}}>
+<div className="ct" style={{color:"var(--accent)",fontSize:18}}>🚀 Começando do zero?</div>
+<div style={{fontSize:14,color:"var(--text2)",lineHeight:1.8}}>
+<strong style={{color:"var(--text)"}}>1.</strong> Vá na <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("pantry")}>Despensa</span> e cadastre o que tem em casa<br/>
+<strong style={{color:"var(--text)"}}>2.</strong> Monte sua <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("grocery")}>Lista de Compras</span> com o que falta<br/>
+<strong style={{color:"var(--text)"}}>3.</strong> No mercado, marque os itens e registre os preços<br/>
+<strong style={{color:"var(--text)"}}>4.</strong> Clique em "Finalizar Compra" — tudo vai pra Despensa e Finanças<br/>
+<strong style={{color:"var(--text)"}}>5.</strong> Crie <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("chores")}>Tarefas</span> e distribua entre a família<br/>
+<strong style={{color:"var(--text)"}}>6.</strong> Planeje o <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("meals")}>Cardápio</span> da semana<br/>
+<strong style={{color:"var(--text)"}}>7.</strong> Personalize tudo nas <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("settings")}>Configurações</span>
+</div>
+</div>
+{/* FAQ */}
+<div className="card">
+<div className="ct">❓ Perguntas Frequentes</div>
+<div style={{display:"flex",flexDirection:"column",gap:16}}>
+{[
+{q:"Como compartilho com minha família?",a:"Vá em Configurações → Casa. Lá tem o código da casa. Mande para a pessoa — ela faz login, clica em 'Entrar com Código' e digita. Pronto, vocês compartilham tudo!"},
+{q:"Posso mudar o visual do app?",a:"Sim! Configurações → Aparência. Tem 6 temas e várias cores de destaque pra escolher."},
+{q:"Como instalo no celular?",a:"No Android: o app oferece instalar automaticamente, ou vá nos 3 pontinhos do navegador → 'Instalar app'. No iPhone: Safari → botão compartilhar → 'Adicionar à Tela de Início'."},
+{q:"Meus dados estão seguros?",a:"Sim! Os dados ficam no Firebase (nuvem do Google). Cada casa tem seus dados separados e protegidos por login."},
+{q:"Posso usar em mais de uma casa?",a:"Sim! Vá em Configurações → Casa → 'Sair desta casa'. Depois entre com outro código ou crie uma nova."},
+].map((faq,i)=>(<div key={i}><div style={{fontSize:14,fontWeight:600,color:"var(--text)",marginBottom:4}}>{faq.q}</div><div style={{fontSize:13,color:"var(--text2)",lineHeight:1.6}}>{faq.a}</div></div>))}
+</div>
+</div>
+{/* Detailed sections */}
+<div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:16,marginTop:8}}>📖 Guia por seção</div>
+{sections.map(sec=>(<div className="card" key={sec.id}>
+<div className="ct" style={{cursor:"pointer"}} onClick={()=>goTo(sec.id==="config"?"settings":sec.id==="financas"?"budget":sec.id==="compras"?"grocery":sec.id==="despensa"?"pantry":sec.id==="cardapio"?"meals":sec.id==="tarefas"?"chores":sec.id)}>
+<span style={{fontSize:20}}>{sec.icon}</span>
+<span style={{color:sec.color}}>{sec.title}</span>
+<span style={{marginLeft:"auto",fontSize:12,color:"var(--accent)"}}>Abrir →</span>
+</div>
+<div style={{display:"flex",flexDirection:"column",gap:10}}>
+{sec.content.map((p,i)=>(<div key={i} style={{fontSize:13,color:"var(--text2)",lineHeight:1.7,paddingLeft:12,borderLeft:`2px solid ${sec.color}33`}}>{p}</div>))}
+</div>
+</div>))}
+</div>);}
+
 // ─── PWA Install Hook (shared between banner and sidebar) ───
 function useInstallPrompt(){
 const[prompt,setPrompt]=useState(null);const[installed,setInstalled]=useState(false);const[isIOS,setIsIOS]=useState(false);
@@ -630,6 +773,7 @@ Baixar App
 // ─── MAIN APP ───
 export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo }){
 const installHook=useInstallPrompt();
+const[showTour,setShowTour]=useState(()=>{try{return!localStorage.getItem("stockly-tour-done");}catch{return true;}});
 const[data,setDataRaw]=useState(()=>{const l=load();const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
@@ -637,9 +781,10 @@ useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){co
 
 const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user]);
 const toast=useCallback((m)=>{setTm(m);setTimeout(()=>setTm(""),2500);},[]);
+const finishTour=()=>{setShowTour(false);try{localStorage.setItem("stockly-tour-done","1");}catch{}};
 const c=data.config;const tv=THEMES[c.theme]||THEMES.dark;const ac=c.accentColor||"#F0A050";
 const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.expiry);return(d<=w&&d>=0)||d<0;}).length;const pg=data.grocery.filter(i=>!i.checked).length;
-const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"settings",label:"Configurações",icon:I.settings}];
+const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"help",label:"Ajuda",icon:I.help},{id:"settings",label:"Configurações",icon:I.settings}];
 const go=(id)=>{setPage(id);setSo(false);};
 return(<><style>{getCSS(tv,ac)}</style><div className="app">
 <div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span></div>
@@ -655,5 +800,6 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="meals"&&<MealsPage data={data} setData={setData} toast={toast}/>}
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
+{page==="help"&&<HelpPage goTo={go}/>}
 {page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo}/>}
-</main></div><InstallBanner installHook={installHook}/><Toast message={tm}/></>);}
+</main></div>{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm}/></>);}
