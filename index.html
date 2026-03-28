@@ -2,13 +2,44 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Stockly</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M20 4L36 4L20 32L28 32L12 60L20 60L4 32L12 32L20 4Z' fill='%23F0A050'/%3E%3Cpath d='M32 4L48 4L32 32L40 32L24 60L32 60L16 32L24 32L32 4Z' fill='%23F0A050' opacity='0.5'/%3E%3C/svg%3E" />
-    <style>body { margin: 0; background: #0C0F14; }</style>
+    <meta name="description" content="Hub completo de gestão doméstica. Despensa, compras, tarefas, cardápio e finanças." />
+    <meta name="theme-color" content="#0C0F14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Stockly" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon-192.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <style>
+      body { margin: 0; background: #0C0F14; }
+      /* PWA splash / loading */
+      #pwa-splash { position:fixed; inset:0; background:#0C0F14; display:flex; align-items:center; justify-content:center; z-index:9999; transition:opacity .3s; }
+      #pwa-splash.hide { opacity:0; pointer-events:none; }
+    </style>
   </head>
   <body>
+    <div id="pwa-splash">
+      <svg width="80" height="80" viewBox="0 0 64 64" fill="none">
+        <path d="M20 4L36 4L20 32L28 32L12 60L20 60L4 32L12 32L20 4Z" fill="#F0A050"/>
+        <path d="M32 4L48 4L32 32L40 32L24 60L32 60L16 32L24 32L32 4Z" fill="#F0A050" opacity="0.5"/>
+      </svg>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Hide splash when app loads
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const s = document.getElementById('pwa-splash');
+          if (s) { s.classList.add('hide'); setTimeout(() => s.remove(), 300); }
+        }, 400);
+      });
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+    </script>
   </body>
 </html>
