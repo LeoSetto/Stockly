@@ -417,8 +417,9 @@ const paidTotal=expenses.filter(e=>e.paid).reduce((a,e)=>a+e.amount,0);
 const pendingTotal=expenses.filter(e=>!e.paid).reduce((a,e)=>a+e.amount,0);
 const rem=data.budget-ts;const pct=data.budget>0?Math.min((ts/data.budget)*100,100):0;
 const togglePaid=(id)=>{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===id?{...e,paid:!e.paid}:e)}));};
-const ae=()=>{if(!form.desc||!form.amount)return;setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false,card:form.card||""},...d.expenses]}));toast("Registrado");setModal(null);};
+const saveExpense=()=>{if(!form.desc||!form.amount)return;if(modal==="add"){setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false,card:form.card||""},...d.expenses]}));toast("Registrado");}else{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===form.id?{...form,amount:Number(form.amount)}:e)}));toast("Atualizado");}setModal(null);};
 const de=(id)=>{setData(d=>({...d,expenses:d.expenses.filter(e=>e.id!==id)}));toast("Removido");};
+const openEdit=(e)=>{setForm({...e});setModal("edit");};
 const sb=()=>{setData(d=>({...d,budget:Number(bv)}));setEb(false);toast("Orçamento atualizado");};
 const bc={};expenses.forEach(e=>{bc[e.category]=(bc[e.category]||0)+e.amount;});
 const filtered=filter==="all"?expenses:filter==="paid"?expenses.filter(e=>e.paid):expenses.filter(e=>!e.paid);
@@ -442,10 +443,10 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 <td>{e.card?<span className="tg tg-b">{e.card}</span>:<span style={{color:"var(--text3)",fontSize:12}}>—</span>}</td>
 <td><span className="tg tg-n">{e.category}</span></td>
 <td style={{color:"var(--text3)"}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td>
-<td><button className="bi" onClick={()=>de(e.id)}>{I.trash}</button></td>
+<td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>openEdit(e)} title="Editar">{I.edit}</button><button className="bi" onClick={()=>de(e.id)} title="Remover">{I.trash}</button></div></td>
 </tr>))}
 </tbody></table></div></div>
-{modal&&<Modal title="Novo Gasto" onClose={()=>setModal(null)}>
+{modal&&<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>setModal(null)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><input type="number" step="0.01" value={form.amount||""} onChange={e=>setForm({...form,amount:e.target.value})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div>
 <div className="fg"><label className="fl">Cartão / Pagamento</label><select value={form.card||""} onChange={e=>setForm({...form,card:e.target.value})}><option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div></div>
@@ -454,7 +455,7 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${form.paid?"var(--green)":"var(--yellow)"}`,background:form.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{form.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
 <span style={{fontSize:14,color:form.paid?"var(--green)":"var(--yellow)",fontWeight:500}}>{form.paid?"Já pago":"Ainda não pago (cartão, fatura, etc)"}</span>
 </div>
-<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={ae}>Salvar</button></div>
+<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={saveExpense}>Salvar</button></div>
 </Modal>}
 {eb&&<Modal title="Editar Orçamento" onClose={()=>setEb(false)}><div className="fg"><label className="fl">Orçamento Mensal</label><input type="number" value={bv} onChange={e=>setBv(e.target.value)} autoFocus/></div><div className="ma"><button className="btn bg" onClick={()=>setEb(false)}>Cancelar</button><button className="btn bp" onClick={sb}>Salvar</button></div></Modal>}
 </div>);}
