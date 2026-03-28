@@ -89,7 +89,15 @@ async function getUserProfile(uid) {
 }
 
 async function setUserProfile(uid, data) {
-  try { await setDoc(doc(db, "userProfiles", uid), data); } catch (e) { console.error(e); }
+  try { await setDoc(doc(db, "userProfiles", uid), data, { merge: true }); } catch (e) { console.error(e); }
+}
+
+export async function saveUserPrefs(uid, prefs) {
+  try { await setDoc(doc(db, "userProfiles", uid), { prefs }, { merge: true }); } catch (e) { console.error(e); }
+}
+
+export async function loadUserPrefs(uid) {
+  try { const s = await getDoc(doc(db, "userProfiles", uid)); return s.exists() ? (s.data().prefs || null) : null; } catch { return null; }
 }
 
 async function getHouseInfo(code) {
@@ -290,6 +298,8 @@ export default function AuthProvider({ children }) {
       houseInfo,
       leaveHouse,
       refreshHouseInfo: async () => { const info = await getHouseInfo(houseCode); setHouseInfoState(info); },
+      saveUserPrefs: (prefs) => saveUserPrefs(user.uid, prefs),
+      loadUserPrefs: () => loadUserPrefs(user.uid),
     });
   }
 
