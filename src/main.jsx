@@ -6,7 +6,7 @@ import App from "./App";
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
-      {({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo }) => (
+      {({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo, saveUserPrefs, loadUserPrefs }) => (
         <App
           user={user}
           logout={logout}
@@ -16,6 +16,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           houseInfo={houseInfo}
           leaveHouse={leaveHouse}
           refreshHouseInfo={refreshHouseInfo}
+          saveUserPrefs={saveUserPrefs}
+          loadUserPrefs={loadUserPrefs}
         />
       )}
     </AuthProvider>
