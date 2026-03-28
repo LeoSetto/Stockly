@@ -66,17 +66,36 @@ const DEFAULT_DATA = {
   members: ["João", "Maria"],
   budget: 2500,
   priceHistory: [
-    { id: 1, name: "Arroz", price: 22.90, qty: 5, unit: "kg", date: "2026-01-15" },
-    { id: 2, name: "Arroz", price: 24.50, qty: 5, unit: "kg", date: "2026-02-12" },
-    { id: 3, name: "Arroz", price: 25.90, qty: 5, unit: "kg", date: "2026-03-10" },
-    { id: 4, name: "Feijão Preto", price: 8.90, qty: 1, unit: "kg", date: "2026-01-15" },
-    { id: 5, name: "Feijão Preto", price: 9.50, qty: 1, unit: "kg", date: "2026-02-20" },
-    { id: 6, name: "Feijão Preto", price: 7.90, qty: 1, unit: "kg", date: "2026-03-18" },
-    { id: 7, name: "Leite", price: 5.49, qty: 1, unit: "L", date: "2026-02-05" },
-    { id: 8, name: "Leite", price: 5.99, qty: 1, unit: "L", date: "2026-03-08" },
-    { id: 9, name: "Café", price: 18.90, qty: 500, unit: "g", date: "2026-01-20" },
-    { id: 10, name: "Café", price: 21.50, qty: 500, unit: "g", date: "2026-03-05" },
+    { id: 1, name: "Arroz", unitPrice: 4.58, totalPrice: 22.90, qty: 5, unit: "kg", date: "2026-01-15" },
+    { id: 2, name: "Arroz", unitPrice: 4.90, totalPrice: 24.50, qty: 5, unit: "kg", date: "2026-02-12" },
+    { id: 3, name: "Arroz", unitPrice: 5.18, totalPrice: 25.90, qty: 5, unit: "kg", date: "2026-03-10" },
+    { id: 4, name: "Feijão Preto", unitPrice: 8.90, totalPrice: 8.90, qty: 1, unit: "kg", date: "2026-01-15" },
+    { id: 5, name: "Feijão Preto", unitPrice: 9.50, totalPrice: 9.50, qty: 1, unit: "kg", date: "2026-02-20" },
+    { id: 6, name: "Feijão Preto", unitPrice: 7.90, totalPrice: 7.90, qty: 1, unit: "kg", date: "2026-03-18" },
+    { id: 7, name: "Leite", unitPrice: 5.49, totalPrice: 5.49, qty: 1, unit: "L", date: "2026-02-05" },
+    { id: 8, name: "Leite", unitPrice: 5.99, totalPrice: 5.99, qty: 1, unit: "L", date: "2026-03-08" },
+    { id: 9, name: "Café", unitPrice: 18.90, totalPrice: 18.90, qty: 500, unit: "g", date: "2026-01-20" },
+    { id: 10, name: "Café", unitPrice: 21.50, totalPrice: 21.50, qty: 500, unit: "g", date: "2026-03-05" },
   ],
+  shoppingTrips: [],
+  _version: 3,
+};
+
+// ─── Data migration — upgrades old data to new format ───
+const DATA_VERSION = 3;
+const migrateData = (d) => {
+  if (!d) return d;
+  const v = d._version || 1;
+  if (v >= DATA_VERSION) return d;
+  let m = { ...d };
+  // v1→v2: add priceHistory if missing
+  if (!m.priceHistory) m.priceHistory = [];
+  // v2→v3: add unitPrice to priceHistory entries, add shoppingTrips, ensure grocery items have price field
+  if (!m.shoppingTrips) m.shoppingTrips = [];
+  m.priceHistory = (m.priceHistory || []).map(p => ({ ...p, unitPrice: p.unitPrice || p.price || 0, totalPrice: p.totalPrice || p.price || 0 }));
+  m.grocery = (m.grocery || []).map(i => ({ ...i, price: i.price || 0, unitPrice: i.unitPrice || i.price || 0 }));
+  m._version = DATA_VERSION;
+  return m;
 };
 
 // ─── Helpers ───
@@ -218,25 +237,48 @@ return(<tr key={item.id}><td className="in">{item.name}</td><td>{item.qty} {item
 </Modal>}</div>);}
 
 // ─── GROCERY ───
-function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[priceVal,setPriceVal]=useState("");
+function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");
 const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
-const toggle=(id)=>{const item=data.grocery.find(i=>i.id===id);if(item&&!item.checked){setPriceModal(item);setPriceVal(item.price||"");}else{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));}};
-const confirmCheck=()=>{if(!priceModal)return;const price=Number(priceVal)||0;setData(d=>{const newPH=price>0?[...d.priceHistory,{id:Date.now(),name:priceModal.name,price,qty:priceModal.qty,unit:priceModal.unit,date:today()}]:d.priceHistory;return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,price}:i),priceHistory:newPH};});if(price>0)toast(`${priceModal.name}: ${fmt(price)} registrado`);else toast("Item marcado");setPriceModal(null);setPriceVal("");};
-const skipPrice=()=>{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true}:i)}));toast("Item marcado");setPriceModal(null);setPriceVal("");};
+const toggle=(id)=>{const item=data.grocery.find(i=>i.id===id);if(item&&!item.checked){setPriceModal(item);setUnitPriceVal(item.unitPrice||"");}else{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));}};
+const confirmCheck=()=>{if(!priceModal)return;const up=Number(unitPriceVal)||0;const tp=up*(priceModal.qty||1);setData(d=>{const newPH=up>0?[...(d.priceHistory||[]),{id:Date.now(),name:priceModal.name,unitPrice:up,totalPrice:tp,qty:priceModal.qty,unit:priceModal.unit,date:today()}]:d.priceHistory||[];return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,unitPrice:up,price:tp}:i),priceHistory:newPH};});if(up>0)toast(`${priceModal.name}: ${fmt(up)}/un × ${priceModal.qty} = ${fmt(tp)}`);else toast("Item marcado");setPriceModal(null);setUnitPriceVal("");};
+const skipPrice=()=>{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true}:i)}));toast("Item marcado");setPriceModal(null);setUnitPriceVal("");};
+// Edit price of already checked item
+const saveEditPrice=()=>{if(!editingPrice)return;const up=Number(editUP)||0;const tp=up*(editingPrice.qty||1);setData(d=>{// Update grocery item
+const newGrocery=d.grocery.map(i=>i.id===editingPrice.id?{...i,unitPrice:up,price:tp}:i);// Update last priceHistory entry for this item on today's date, or add new
+let newPH=[...(d.priceHistory||[])];const existIdx=newPH.findIndex(p=>p.name===editingPrice.name&&p.date===today());if(up>0){if(existIdx>=0){newPH[existIdx]={...newPH[existIdx],unitPrice:up,totalPrice:tp};}else{newPH.push({id:Date.now(),name:editingPrice.name,unitPrice:up,totalPrice:tp,qty:editingPrice.qty,unit:editingPrice.unit,date:today()});}}return{...d,grocery:newGrocery,priceHistory:newPH};});toast("Preço atualizado");setEditingPrice(null);};
 const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
-const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:Number(form.price)||0}]}));toast("Adicionado");setModal(false);};
+const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:0,unitPrice:0}]}));toast("Adicionado");setModal(false);};
 const toP=(item)=>{setData(d=>({...d,pantry:[...d.pantry,{id:Date.now(),name:item.name,qty:item.qty,unit:item.unit,location:c.locations[0]||"Despensa",expiry:"",category:item.category}],grocery:d.grocery.filter(i=>i.id!==item.id)}));toast(`"${item.name}" → despensa`);};
-const clr=()=>{data.grocery.filter(i=>i.checked).forEach(toP);};
+// Finish shopping: save trip and move to pantry
+const finishShopping=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total};setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));toast(`Compra finalizada! Total: ${fmt(total)}`);};
 const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
-// Get last known price for an item
-const lastPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.price||null;};
-return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados</div></div>
-<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0],price:""});setModal(true);}}>{I.plus} Adicionar</button>{done.length>0&&<button className="btn bg" onClick={clr}>Comprados → Despensa</button>}</div>
+const doneTotal=done.reduce((a,i)=>a+(i.price||0),0);
+// Get last known unit price for an item
+const lastUnitPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.unitPrice||h[0]?.totalPrice||null;};
+return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados{doneTotal>0&&` · Total: ${fmt(doneTotal)}`}</div></div>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setModal(true);}}>{I.plus} Adicionar</button>
+{done.length>0&&<button className="btn bg" onClick={finishShopping}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
-{pend.map(i=>{const lp=lastPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}<span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>);})}
-{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span></div>}
-{done.map(i=>(<div className="cr" key={i.id} style={{opacity:.5}}><div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div><span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{i.price>0&&<span style={{fontSize:12,color:"var(--green)"}}>{fmt(i.price)}</span>}<button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>))}
+{pend.map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}/un</span>}<span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>);})}
+{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
+{done.map(i=>(<div className="cr" key={i.id} style={{opacity:.7}}>
+<div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>
+<span className="cx dn">{i.name}</span>
+<span className="cm">{i.qty} {i.unit}</span>
+{i.price>0?<span style={{fontSize:12,color:"var(--green)",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setEditingPrice(i);setEditUP(i.unitPrice||"");}}>{fmt(i.unitPrice||0)}/un = {fmt(i.price)} {I.edit}</span>:<span style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}} onClick={()=>{setEditingPrice(i);setEditUP("");}}>+ preço</span>}
+<button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button>
+</div>))}
 </div>
+{/* Shopping trips history */}
+{(data.shoppingTrips||[]).length>0&&<div className="card"><div className="ct">Últimas Compras</div>
+{(data.shoppingTrips||[]).slice(0,5).map(trip=>(<div key={trip.id} style={{borderBottom:"1px solid var(--border)",padding:"12px 0"}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+<span style={{fontSize:13,color:"var(--text2)"}}>{new Date(trip.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long",year:"numeric"})}</span>
+<span style={{fontSize:15,fontWeight:700,color:"var(--accent)"}}>{fmt(trip.total)}</span>
+</div>
+<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{trip.items.map((it,idx)=>(<span key={idx} style={{fontSize:11,background:"var(--bg3)",padding:"3px 8px",borderRadius:6,color:"var(--text3)"}}>{it.name} {it.totalPrice>0?fmt(it.totalPrice):""}</span>))}</div>
+</div>))}
+</div>}
 {modal&&<Modal title="Novo Item" onClose={()=>setModal(false)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Nome</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Unidade</label><select value={form.unit||c.units[0]} onChange={e=>setForm({...form,unit:e.target.value})}>{c.units.map(u=><option key={u}>{u}</option>)}</select></div>
@@ -244,10 +286,22 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div className="ma"><button className="btn bg" onClick={()=>setModal(false)}>Cancelar</button><button className="btn bp" onClick={add}>Adicionar</button></div>
 </Modal>}
 {priceModal&&<Modal title={`Preço: ${priceModal.name}`} onClose={()=>{skipPrice();}}>
-<div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Quanto pagou neste item? (opcional — ajuda a rastrear preços)</div>
-<div className="fg"><label className="fl">Preço pago</label><input type="number" step="0.01" value={priceVal} onChange={e=>setPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
-{lastPrice(priceModal.name)&&<div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Último preço registrado: {fmt(lastPrice(priceModal.name))}</div>}
+<div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Quanto custa cada unidade? (opcional)</div>
+<div className="fr">
+<div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={unitPriceVal} onChange={e=>setUnitPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
+<div className="fg"><label className="fl">Qtd</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{priceModal.qty} {priceModal.unit}</div></div>
+</div>
+{Number(unitPriceVal)>0&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(unitPriceVal)*(priceModal.qty||1))}</div>}
+{lastUnitPrice(priceModal.name)&&<div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Último preço: {fmt(lastUnitPrice(priceModal.name))}/un</div>}
 <div className="ma"><button className="btn bg" onClick={skipPrice}>Pular</button><button className="btn bp" onClick={confirmCheck}>Registrar</button></div>
+</Modal>}
+{editingPrice&&<Modal title={`Editar preço: ${editingPrice.name}`} onClose={()=>setEditingPrice(null)}>
+<div className="fr">
+<div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={editUP} onChange={e=>setEditUP(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditPrice()}/></div>
+<div className="fg"><label className="fl">Qtd</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{editingPrice.qty} {editingPrice.unit}</div></div>
+</div>
+{Number(editUP)>0&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(editUP)*(editingPrice.qty||1))}</div>}
+<div className="ma"><button className="btn bg" onClick={()=>setEditingPrice(null)}>Cancelar</button><button className="btn bp" onClick={saveEditPrice}>Salvar</button></div>
 </Modal>}
 </div>);}
 
@@ -362,40 +416,35 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 </div>);}
 
 // ─── PRICES ───
-function PricesPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[search,setSearch]=useState("");const[modal,setModal]=useState(null);const[form,setForm]=useState({});
+function PricesPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[search,setSearch]=useState("");const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[editEntry,setEditEntry]=useState(null);const[editVal,setEditVal]=useState("");
 const ph=data.priceHistory||[];
-// Group by product name
 const grouped={};ph.forEach(p=>{if(!grouped[p.name])grouped[p.name]=[];grouped[p.name].push(p);});
 Object.values(grouped).forEach(arr=>arr.sort((a,b)=>a.date.localeCompare(b.date)));
-// Get unique product names sorted
 const products=Object.keys(grouped).filter(n=>!search||n.toLowerCase().includes(search.toLowerCase())).sort();
-// Stats
-const getStats=(name)=>{const arr=grouped[name]||[];if(arr.length===0)return{last:0,prev:0,change:0,count:0,min:0,max:0,avg:0};const last=arr[arr.length-1].price;const prev=arr.length>1?arr[arr.length-2].price:last;const change=prev>0?((last-prev)/prev)*100:0;const prices=arr.map(p=>p.price);return{last,prev,change,count:arr.length,min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((a,b)=>a+b,0)/prices.length};};
-// Mini sparkline SVG
-const Spark=({data:pts,width=120,height=32})=>{if(pts.length<2)return<span style={{fontSize:11,color:"var(--text3)"}}>1 registro</span>;const prices=pts.map(p=>p.price);const mn=Math.min(...prices);const mx=Math.max(...prices);const range=mx-mn||1;const points=prices.map((p,i)=>`${(i/(prices.length-1))*width},${height-((p-mn)/range)*height}`).join(" ");const rising=prices[prices.length-1]>=prices[0];return(<svg width={width} height={height} style={{display:"block"}}><polyline points={points} fill="none" stroke={rising?"var(--red)":"var(--green)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>{prices.map((p,i)=>(<circle key={i} cx={(i/(prices.length-1))*width} cy={height-((p-mn)/range)*height} r="3" fill={i===prices.length-1?"var(--accent)":rising?"var(--red)":"var(--green)"} opacity={i===prices.length-1?1:0.5}/>))}</svg>);};
-// Add manual price entry
-const addPrice=()=>{if(!form.name||!form.price)return;setData(d=>({...d,priceHistory:[...(d.priceHistory||[]),{id:Date.now(),name:form.name,price:Number(form.price),qty:Number(form.qty)||1,unit:form.unit||"un",date:form.date||today()}]}));toast("Preço registrado");setModal(null);};
+const getStats=(name)=>{const arr=grouped[name]||[];if(arr.length===0)return{last:0,prev:0,change:0,count:0,min:0,max:0,avg:0};const prices=arr.map(p=>p.unitPrice||p.totalPrice||0);const last=prices[prices.length-1];const prev=prices.length>1?prices[prices.length-2]:last;const change=prev>0?((last-prev)/prev)*100:0;return{last,prev,change,count:arr.length,min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((a,b)=>a+b,0)/prices.length};};
+const Spark=({data:pts,width=120,height=32})=>{if(pts.length<2)return<span style={{fontSize:11,color:"var(--text3)"}}>1 registro</span>;const prices=pts.map(p=>p.unitPrice||p.totalPrice||0);const mn=Math.min(...prices);const mx=Math.max(...prices);const range=mx-mn||1;const points=prices.map((p,i)=>`${(i/(prices.length-1))*width},${height-((p-mn)/range)*height}`).join(" ");const rising=prices[prices.length-1]>=prices[0];return(<svg width={width} height={height} style={{display:"block"}}><polyline points={points} fill="none" stroke={rising?"var(--red)":"var(--green)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>{prices.map((p,i)=>(<circle key={i} cx={(i/(prices.length-1))*width} cy={height-((p-mn)/range)*height} r="3" fill={i===prices.length-1?"var(--accent)":rising?"var(--red)":"var(--green)"} opacity={i===prices.length-1?1:0.5}/>))}</svg>);};
+const addPrice=()=>{if(!form.name||!form.price)return;const up=Number(form.price);const q=Number(form.qty)||1;setData(d=>({...d,priceHistory:[...(d.priceHistory||[]),{id:Date.now(),name:form.name,unitPrice:up,totalPrice:up*q,qty:q,unit:form.unit||"un",date:form.date||today()}]}));toast("Preço registrado");setModal(null);};
+const saveEditEntry=()=>{if(!editEntry)return;const up=Number(editVal)||0;setData(d=>({...d,priceHistory:(d.priceHistory||[]).map(p=>p.id===editEntry.id?{...p,unitPrice:up,totalPrice:up*(p.qty||1)}:p)}));toast("Preço atualizado");setEditEntry(null);};
+const delEntry=(id)=>{setData(d=>({...d,priceHistory:(d.priceHistory||[]).filter(p=>p.id!==id)}));toast("Registro removido");};
 const delProduct=(name)=>{if(!confirm(`Apagar todo o histórico de "${name}"?`))return;setData(d=>({...d,priceHistory:(d.priceHistory||[]).filter(p=>p.name!==name)}));toast("Histórico removido");};
-// Total items tracked
 const totalProducts=Object.keys(grouped).length;const totalEntries=ph.length;
-// Products with biggest increase
 const alerts=products.map(n=>({name:n,...getStats(n)})).filter(s=>s.count>=2&&s.change>0).sort((a,b)=>b.change-a.change).slice(0,3);
-return(<div><div className="ph"><div className="pt">Preços</div><div className="ps">Histórico e evolução de preços dos itens</div></div>
+return(<div><div className="ph"><div className="pt">Preços</div><div className="ps">Histórico e evolução de preços unitários</div></div>
 <div className="sg">
-<div className="sc ac"><div className="sl">Produtos Rastreados</div><div className="sv">{totalProducts}</div><div className="sd">{totalEntries} registros no total</div></div>
+<div className="sc ac"><div className="sl">Produtos Rastreados</div><div className="sv">{totalProducts}</div><div className="sd">{totalEntries} registros</div></div>
 {alerts.length>0&&<div className="sc rd"><div className="sl">Maior Alta</div><div className="sv" style={{color:"var(--red)",fontSize:22}}>{alerts[0].name}</div><div className="sd">+{alerts[0].change.toFixed(1)}% ({fmt(alerts[0].prev)} → {fmt(alerts[0].last)})</div></div>}
 {(()=>{const drops=products.map(n=>({name:n,...getStats(n)})).filter(s=>s.count>=2&&s.change<0).sort((a,b)=>a.change-b.change);return drops.length>0?<div className="sc gn"><div className="sl">Maior Queda</div><div className="sv" style={{color:"var(--green)",fontSize:22}}>{drops[0].name}</div><div className="sd">{drops[0].change.toFixed(1)}% ({fmt(drops[0].prev)} → {fmt(drops[0].last)})</div></div>:null;})()}
 </div>
 <div className="tb"><div className="sb-i" style={{marginBottom:0,flex:1,maxWidth:320}}>{I.search}<input placeholder="Buscar produto..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
-<div className="tr"><button className="btn bp" onClick={()=>{setForm({name:"",price:"",qty:"",unit:c.units[0]||"un",date:today()});setModal("add");}}>{I.plus} Registrar Preço</button></div></div>
-{products.length===0&&<div className="card" style={{textAlign:"center",padding:40,color:"var(--text3)"}}>{search?"Nenhum produto encontrado":"Nenhum preço registrado ainda. Marque itens como comprados na Lista de Compras ou registre manualmente."}</div>}
+<div className="tr"><button className="btn bp" onClick={()=>{setForm({name:"",price:"",qty:"1",unit:c.units[0]||"un",date:today()});setModal("add");}}>{I.plus} Registrar Preço</button></div></div>
+{products.length===0&&<div className="card" style={{textAlign:"center",padding:40,color:"var(--text3)"}}>{search?"Nenhum produto encontrado":"Nenhum preço registrado. Marque itens na Lista de Compras ou registre manualmente."}</div>}
 {products.map(name=>{const stats=getStats(name);const arr=grouped[name];return(
 <div className="card" key={name} style={{padding:20}}>
 <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
 <div style={{flex:1,minWidth:150}}>
 <div style={{fontSize:16,fontWeight:600,color:"var(--text)",marginBottom:4}}>{name}</div>
 <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-<span style={{fontSize:20,fontWeight:700}}>{fmt(stats.last)}</span>
+<span style={{fontSize:20,fontWeight:700}}>{fmt(stats.last)}<span style={{fontSize:11,color:"var(--text3)",fontWeight:400}}>/un</span></span>
 {stats.count>=2&&<span style={{fontSize:13,fontWeight:600,color:stats.change>0?"var(--red)":stats.change<0?"var(--green)":"var(--text3)",background:stats.change>0?"var(--red-bg)":stats.change<0?"var(--green-bg)":"var(--bg4)",padding:"2px 10px",borderRadius:12}}>{stats.change>0?"+":""}{stats.change.toFixed(1)}%</span>}
 <span style={{fontSize:11,color:"var(--text3)"}}>{stats.count} registro{stats.count>1?"s":""}</span>
 </div>
@@ -404,15 +453,22 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 <div style={{minWidth:130}}><Spark data={arr}/></div>
 <button className="bi" onClick={()=>delProduct(name)} title="Apagar histórico">{I.trash}</button>
 </div>
-{arr.length>1&&<div style={{marginTop:12,display:"flex",gap:6,flexWrap:"wrap"}}>{arr.map((p,i)=><div key={p.id} style={{fontSize:11,color:"var(--text3)",background:"var(--bg3)",padding:"4px 10px",borderRadius:8}}><span style={{color:"var(--text2)",fontWeight:600}}>{fmt(p.price)}</span> <span>{new Date(p.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span></div>)}</div>}
+{arr.length>=1&&<div style={{marginTop:12,display:"flex",gap:6,flexWrap:"wrap"}}>{arr.map((p)=><div key={p.id} style={{fontSize:11,color:"var(--text3)",background:"var(--bg3)",padding:"4px 10px",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:4,border:"1px solid transparent",transition:"border-color .2s"}} onClick={()=>{setEditEntry(p);setEditVal(p.unitPrice||p.totalPrice||"");}} title="Clique para editar"><span style={{color:"var(--text2)",fontWeight:600}}>{fmt(p.unitPrice||p.totalPrice||0)}</span><span>{new Date(p.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span><span style={{color:"var(--text3)",fontSize:10}}>✎</span></div>)}</div>}
 </div>);})}
 {modal&&<Modal title="Registrar Preço" onClose={()=>setModal(null)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Produto</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ex: Arroz" autoFocus list="price-products"/><datalist id="price-products">{[...new Set(ph.map(p=>p.name))].map(n=><option key={n} value={n}/>)}</datalist></div>
-<div className="fg"><label className="fl">Preço</label><input type="number" step="0.01" value={form.price||""} onChange={e=>setForm({...form,price:e.target.value})} placeholder="0.00"/></div></div>
+<div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={form.price||""} onChange={e=>setForm({...form,price:e.target.value})} placeholder="0.00"/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div>
 <div className="fg"><label className="fl">Unidade</label><select value={form.unit||c.units[0]} onChange={e=>setForm({...form,unit:e.target.value})}>{c.units.map(u=><option key={u}>{u}</option>)}</select></div>
 <div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
+{Number(form.price)>0&&Number(form.qty)>0&&<div style={{fontSize:14,fontWeight:600,color:"var(--accent)",marginTop:4}}>Total: {fmt(Number(form.price)*Number(form.qty))}</div>}
 <div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={addPrice}>Registrar</button></div>
+</Modal>}
+{editEntry&&<Modal title="Editar Preço" onClose={()=>setEditEntry(null)}>
+<div style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>{editEntry.name} — {new Date(editEntry.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long",year:"numeric"})}</div>
+<div className="fr"><div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={editVal} onChange={e=>setEditVal(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditEntry()}/></div></div>
+{Number(editVal)>0&&<div style={{fontSize:14,fontWeight:600,color:"var(--accent)",marginTop:4}}>Total ({editEntry.qty} {editEntry.unit}): {fmt(Number(editVal)*(editEntry.qty||1))}</div>}
+<div className="ma"><button className="btn bd bs" onClick={()=>{delEntry(editEntry.id);setEditEntry(null);}}>Excluir registro</button><button className="btn bg" onClick={()=>setEditEntry(null)}>Cancelar</button><button className="btn bp" onClick={saveEditEntry}>Salvar</button></div>
 </Modal>}
 </div>);}
 
@@ -455,11 +511,11 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 
 // ─── MAIN APP ───
 export default function App({ user, logout, saveUserData, loadUserData }){
-const[data,setDataRaw]=useState(()=>{const l=load();return l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;});
+const[data,setDataRaw]=useState(()=>{const l=load();const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
 // Load from Firebase on start (if available)
-useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){setDataRaw({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});}});}},[user]);
+useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated);}});}},[user]);
 
 const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user]);
 const toast=useCallback((m)=>{setTm(m);setTimeout(()=>setTm(""),2500);},[]);
