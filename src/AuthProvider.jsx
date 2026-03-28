@@ -10,6 +10,14 @@ import {
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, googleProvider, db } from "./firebase";
 
+// Stockly symbol SVG component
+export const StocklySymbol = ({ size = 80, color = "#F0A050" }) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 4L36 4L20 32L28 32L12 60L20 60L4 32L12 32L20 4Z" fill={color}/>
+    <path d="M32 4L48 4L32 32L40 32L24 60L32 60L16 32L24 32L32 4Z" fill={color} opacity="0.5"/>
+  </svg>
+);
+
 const S = {
   page: { minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0C0F14",fontFamily:"'Outfit',sans-serif",padding:16 },
   card: { background:"#141820",border:"1px solid #2A3040",borderRadius:16,padding:40,width:"100%",maxWidth:420,textAlign:"center" },
@@ -94,6 +102,12 @@ export default function AuthProvider({ children }) {
     <>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet"/>
       <div style={S.page}><div style={S.card}>
+
+        {/* Big symbol */}
+        <div style={{marginBottom:20}}>
+          <StocklySymbol size={80} color="#F0A050"/>
+        </div>
+
         <div style={S.logo}>Stockly</div>
         <div style={S.sub}>gestão doméstica</div>
 
