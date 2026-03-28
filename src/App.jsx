@@ -496,7 +496,7 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 </div>);}
 
 // ─── SETTINGS ───
-function SettingsPage({data,setData,toast}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
+function SettingsPage({data,setData,toast,houseCode,houseInfo,leaveHouse,refreshHouseInfo}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
 const uc=(k,v)=>setData(d=>({...d,config:{...d.config,[k]:v}}));
 const al=(k,v)=>{if(!v.trim()||c[k].includes(v.trim()))return;uc(k,[...c[k],v.trim()]);toast("Adicionado");};
 const rl=(k,v)=>{uc(k,c[k].filter(x=>x!==v));toast("Removido");};
@@ -505,7 +505,7 @@ const rmM=(m)=>{setData(d=>({...d,members:d.members.filter(x=>x!==m)}));toast("R
 const exp=()=>{const b=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="lar-centro-backup.json";a.click();URL.revokeObjectURL(u);toast("Backup exportado");};
 const imp=()=>{const inp=document.createElement("input");inp.type="file";inp.accept=".json";inp.onchange=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=(ev)=>{try{const d=JSON.parse(ev.target.result);if(d.config&&d.pantry){setData({...DEFAULT_DATA,...d,config:{...DEFAULT_CONFIG,...(d.config||{})}});toast("Importado!");}else toast("Arquivo inválido");}catch{toast("Erro ao ler");}};r.readAsText(f);};inp.click();};
 const reset=()=>{if(confirm("Resetar tudo?")){setData(DEFAULT_DATA);toast("Resetado");}};
-const tabs=[{id:"geral",label:"Geral",icon:I.home},{id:"aparencia",label:"Aparência",icon:I.palette},{id:"categorias",label:"Categorias",icon:I.tag},{id:"listas",label:"Listas",icon:I.sliders},{id:"dados",label:"Dados",icon:I.download}];
+const tabs=[{id:"geral",label:"Geral",icon:I.home},{id:"casa",label:"Casa",icon:I.users},{id:"aparencia",label:"Aparência",icon:I.palette},{id:"categorias",label:"Categorias",icon:I.tag},{id:"listas",label:"Listas",icon:I.sliders},{id:"dados",label:"Dados",icon:I.download}];
 return(<div><div className="ph"><div className="pt">Configurações</div><div className="ps">Personalize absolutamente tudo</div></div>
 <div style={{display:"flex",gap:4,marginBottom:24,flexWrap:"wrap"}}>{tabs.map(t=><button key={t.id} className={`btn ${tab===t.id?"bp":"bg"} bs`} onClick={()=>setTab(t.id)} style={{gap:6}}>{t.icon} {t.label}</button>)}</div>
 
@@ -513,6 +513,28 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">{I.users} Membros</div><div className="te">{data.members.map(m=><div className="tc" key={m}>{m}<button onClick={()=>rmM(m)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={12}/></button></div>)}</div><div className="ta"><input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Novo membro" onKeyDown={e=>e.key==="Enter"&&addM()}/><button className="btn bp bs" onClick={addM}>{I.plus}</button></div></div>
 <div className="card"><div className="sst">{I.budget} Moeda & Formato</div><div className="fr"><div className="fg"><label className="fl">Moeda</label><select value={c.currency} onChange={e=>uc("currency",e.target.value)}>{CURRENCIES.map(cur=><option key={cur.code} value={cur.code}>{cur.label}</option>)}</select></div><div className="fg"><label className="fl">Locale</label><select value={c.locale} onChange={e=>uc("locale",e.target.value)}><option value="pt-BR">Português (BR)</option><option value="en-US">English (US)</option><option value="es-ES">Español</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option><option value="ja-JP">日本語</option></select></div></div></div>
 <div className="card"><div className="sst">⚠ Alerta de Validade</div><div className="fg" style={{maxWidth:200}}><label className="fl">Dias de antecedência</label><input type="number" value={c.expiryWarnDays} onChange={e=>uc("expiryWarnDays",Number(e.target.value)||7)} min={1} max={90}/></div><div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Itens que vencem em até {c.expiryWarnDays} dias aparecerão como alerta</div></div></>}
+
+{tab==="casa"&&<><div className="card"><div className="sst">{I.users} Código da Casa</div>
+<div style={{padding:"16px 24px",background:"var(--bg3)",border:"2px dashed var(--accent)",borderRadius:12,fontSize:28,fontWeight:800,letterSpacing:6,color:"var(--accent)",textAlign:"center",marginBottom:12,cursor:"pointer",userSelect:"all"}} onClick={()=>{navigator.clipboard?.writeText(houseCode||"");toast("Código copiado!");}} title="Clique para copiar">{houseCode||"—"}</div>
+<p style={{fontSize:12,color:"var(--text3)",marginBottom:8,textAlign:"center"}}>Compartilhe este código para que outras pessoas entrem na sua casa</p>
+</div>
+
+<div className="card"><div className="sst">{I.users} Membros da Casa</div>
+{houseInfo&&houseInfo.members&&houseInfo.members.length>0?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+{houseInfo.members.map((m,i)=>(<div key={m.uid||i} style={{display:"flex",alignItems:"center",gap:10,background:"var(--bg3)",padding:"10px 14px",borderRadius:10}}>
+<div style={{width:32,height:32,borderRadius:"50%",background:"var(--accent-glow)",border:"2px solid var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"var(--accent)"}}>{(m.name||m.email||"?")[0].toUpperCase()}</div>
+<div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:"var(--text)"}}>{m.name||m.email}</div><div style={{fontSize:11,color:"var(--text3)"}}>{m.email}</div></div>
+{i===0&&<span className="tg tg-g" style={{fontSize:10}}>Criador</span>}
+</div>))}
+</div>:<p style={{fontSize:13,color:"var(--text3)"}}>Nenhum membro encontrado</p>}
+<button className="btn bg bs" style={{marginTop:12}} onClick={refreshHouseInfo}>{I.users} Atualizar lista</button>
+</div>
+
+<div className="card"><div className="sst" style={{color:"var(--red)"}}>Sair da Casa</div>
+<p style={{fontSize:13,color:"var(--text3)",marginBottom:12}}>Você pode entrar novamente com o código. Seus dados continuam salvos na casa.</p>
+<button className="btn bd" onClick={leaveHouse}>{I.x} Sair desta casa</button>
+</div>
+</>}
 
 {tab==="aparencia"&&<><div className="card"><div className="sst">{I.palette} Tema</div><div className="thg">{Object.entries(THEMES).map(([k,v])=>(<div key={k} className={`thc ${c.theme===k?"sel":""}`} style={{background:v["--bg2"],color:v["--text"],border:`2px solid ${c.theme===k?c.accentColor:v["--border"]}`}} onClick={()=>uc("theme",k)}><div style={{width:"100%",height:24,borderRadius:4,marginBottom:8,background:`linear-gradient(135deg,${v["--bg"]},${v["--bg3"]})`}}/>{k.charAt(0).toUpperCase()+k.slice(1)}</div>))}</div></div>
 <div className="card"><div className="sst">✦ Cor de Destaque</div><div className="cg">{ACCENT_COLORS.map(col=>(<div key={col} className={`cd ${c.accentColor===col?"sel":""}`} style={{background:col}} onClick={()=>uc("accentColor",col)}/>))}</div><div style={{marginTop:12,display:"flex",alignItems:"center",gap:8}}><label className="fl" style={{margin:0}}>Personalizada:</label><input type="color" value={c.accentColor} onChange={e=>uc("accentColor",e.target.value)} style={{width:40,height:32,padding:2,cursor:"pointer"}}/><span style={{fontSize:12,color:"var(--text3)"}}>{c.accentColor}</span></div></div></>}
@@ -533,7 +555,7 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 </div>);}
 
 // ─── MAIN APP ───
-export default function App({ user, logout, saveUserData, loadUserData }){
+export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo }){
 const[data,setDataRaw]=useState(()=>{const l=load();const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
@@ -559,5 +581,5 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="meals"&&<MealsPage data={data} setData={setData} toast={toast}/>}
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
-{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast}/>}
+{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo}/>}
 </main></div><Toast message={tm}/></>);}
