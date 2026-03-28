@@ -4,6 +4,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updateProfile,
 } from "firebase/auth";
@@ -62,7 +64,12 @@ export default function AuthProvider({ children }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { const u = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); }); return u; }, []);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); });
+    // Handle redirect result (for Samsung Internet and other browsers that don't support popup)
+    getRedirectResult(auth).catch(() => {});
+    return unsub;
+  }, []);
 
   const doLogin = async () => {
     setError(""); setBusy(true);
@@ -84,8 +91,21 @@ export default function AuthProvider({ children }) {
 
   const doGoogle = async () => {
     setError(""); setBusy(true);
-    try { await signInWithPopup(auth, googleProvider); }
-    catch (e) { if (e.code !== "auth/popup-closed-by-user") setError(errMsg[e.code] || "Erro com Google"); }
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (e) {
+      // If popup fails (Samsung Internet, etc), use redirect
+      if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request" || e.code === "auth/internal-error" || e.code === "auth/operation-not-supported-in-this-environment") {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (e2) {
+          setError(errMsg[e2.code] || "Erro com Google");
+        }
+      } else if (e.code !== "auth/popup-closed-by-user") {
+        setError(errMsg[e.code] || "Erro com Google");
+      }
+    }
     setBusy(false);
   };
 
