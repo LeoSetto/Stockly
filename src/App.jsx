@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-// ─── Persistence ───
-const STORAGE_KEY = "lar-centro-data-v2";
-const load = () => { try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch { return null; } };
-const save = (d) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch {} };
+// ─── Persistence (keyed per user) ───
+const getKey = (uid) => `stockly-data-${uid||"anon"}`;
+const load = (uid) => { try { const r = localStorage.getItem(getKey(uid)); return r ? JSON.parse(r) : null; } catch { return null; } };
+const save = (d, uid) => { try { localStorage.setItem(getKey(uid), JSON.stringify(d)); } catch {} };
 
 // ─── Default config & data ───
 const DEFAULT_CONFIG = {
@@ -743,24 +743,30 @@ Baixar App
 
 // ─── MAIN APP ───
 export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo, saveUserPrefs, loadUserPrefs }){
+const uid=user?.uid||"anon";
 const installHook=useInstallPrompt();
-const[showTour,setShowTour]=useState(()=>{try{return!localStorage.getItem("stockly-tour-done");}catch{return true;}});
-const[data,setDataRaw]=useState(()=>{const l=load();const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
-const[userPrefs,setUserPrefsRaw]=useState(()=>{try{const p=localStorage.getItem("stockly-user-prefs");return p?JSON.parse(p):{};}catch{return{};}});
+const[showTour,setShowTour]=useState(()=>{try{return!localStorage.getItem(`stockly-tour-${uid}`);}catch{return true;}});
+const[data,setDataRaw]=useState(()=>{const l=load(uid);const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
+const[userPrefs,setUserPrefsRaw]=useState(()=>{try{const p=localStorage.getItem(`stockly-prefs-${uid}`);return p?JSON.parse(p):{};}catch{return{};}});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
 // Load house data from Firebase
-useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated);}});}},[user]);
+useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated,uid);}else{
+// No data in Firebase — start fresh with defaults
+setDataRaw(DEFAULT_DATA);save(DEFAULT_DATA,uid);}});}},[user]);
 
 // Load individual prefs from Firebase
-useEffect(()=>{if(user&&loadUserPrefs){loadUserPrefs().then(p=>{if(p){setUserPrefsRaw(p);try{localStorage.setItem("stockly-user-prefs",JSON.stringify(p));}catch{}}});}},[user]);
+useEffect(()=>{if(user&&loadUserPrefs){loadUserPrefs().then(p=>{if(p){setUserPrefsRaw(p);try{localStorage.setItem(`stockly-prefs-${uid}`,JSON.stringify(p));}catch{}}});}},[user]);
 
-const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user]);
+// Reset tour state when user changes
+useEffect(()=>{try{setShowTour(!localStorage.getItem(`stockly-tour-${uid}`));}catch{}},[uid]);
 
-const setUserPrefs=useCallback((updater)=>{setUserPrefsRaw(prev=>{const n=typeof updater==="function"?updater(prev):updater;try{localStorage.setItem("stockly-user-prefs",JSON.stringify(n));}catch{}if(user&&saveUserPrefs)saveUserPrefs(n);return n;});},[user]);
+const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n,uid);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user,uid]);
+
+const setUserPrefs=useCallback((updater)=>{setUserPrefsRaw(prev=>{const n=typeof updater==="function"?updater(prev):updater;try{localStorage.setItem(`stockly-prefs-${uid}`,JSON.stringify(n));}catch{}if(user&&saveUserPrefs)saveUserPrefs(n);return n;});},[user,uid]);
 
 const toast=useCallback((m)=>{setTm(m);setTimeout(()=>setTm(""),2500);},[]);
-const finishTour=()=>{setShowTour(false);try{localStorage.setItem("stockly-tour-done","1");}catch{}};
+const finishTour=()=>{setShowTour(false);try{localStorage.setItem(`stockly-tour-${uid}`,"1");}catch{}};
 const c=data.config;
 // Theme and accent come from INDIVIDUAL prefs, fallback to house config
 const myTheme=userPrefs.theme||c.theme||"dark";
