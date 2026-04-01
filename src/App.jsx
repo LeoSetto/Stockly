@@ -167,7 +167,7 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 
 // ─── Shared components ───
 function Modal({title,onClose,children}){return(<div className="mo" onClick={onClose}><div className="md" onClick={e=>e.stopPropagation()}><div className="mdt">{title}<button className="bi" onClick={onClose}>{I.x}</button></div>{children}</div></div>);}
-function Toast({message}){return message?<div className="toast">{I.check} {message}</div>:null;}
+function Toast({message,onUndo}){if(!message)return null;return<div className="toast">{I.check} {message}{onUndo&&<button onClick={onUndo} style={{marginLeft:8,padding:"4px 12px",borderRadius:6,fontSize:12,fontWeight:700,border:"1px solid var(--accent)",background:"transparent",color:"var(--accent)",cursor:"pointer",fontFamily:"'Outfit',sans-serif",whiteSpace:"nowrap",transition:"all .2s"}}>Desfazer</button>}</div>;}
 function TagEditor({items,onAdd,onRemove,placeholder="Novo item..."}){const[v,setV]=useState("");const add=()=>{const t=v.trim();if(t&&!items.includes(t)){onAdd(t);setV("");}};return(<div><div className="te">{items.map(t=><div className="tc" key={t}>{t}<button onClick={()=>onRemove(t)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={12}/></button></div>)}</div><div className="ta"><input value={v} onChange={e=>setV(e.target.value)} placeholder={placeholder} onKeyDown={e=>e.key==="Enter"&&add()}/><button className="btn bp bs" onClick={add}>{I.plus}</button></div></div>);}
 
 // ─── DASHBOARD ───
@@ -761,11 +761,14 @@ useEffect(()=>{if(user&&loadUserPrefs){loadUserPrefs().then(p=>{if(p){setUserPre
 // Reset tour state when user changes
 useEffect(()=>{try{setShowTour(!localStorage.getItem(`stockly-tour-${uid}`));}catch{}},[uid]);
 
-const setData=useCallback((u)=>{setDataRaw(p=>{const n=typeof u==="function"?u(p):u;save(n,uid);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user,uid]);
+const undoRef=useRef(null);const toastTimer=useRef(null);
+
+const setData=useCallback((u)=>{setDataRaw(p=>{undoRef.current=p;const n=typeof u==="function"?u(p):u;save(n,uid);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user,uid]);
 
 const setUserPrefs=useCallback((updater)=>{setUserPrefsRaw(prev=>{const n=typeof updater==="function"?updater(prev):updater;try{localStorage.setItem(`stockly-prefs-${uid}`,JSON.stringify(n));}catch{}if(user&&saveUserPrefs)saveUserPrefs(n);return n;});},[user,uid]);
 
-const toast=useCallback((m)=>{setTm(m);setTimeout(()=>setTm(""),2500);},[]);
+const toast=useCallback((m)=>{setTm(m);if(toastTimer.current)clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>{setTm("");undoRef.current=null;},4000);},[]);
+const doUndo=useCallback(()=>{if(undoRef.current){setDataRaw(undoRef.current);save(undoRef.current,uid);if(user&&saveUserData)saveUserData(user.uid,undoRef.current);undoRef.current=null;setTm("Ação desfeita!");setTimeout(()=>setTm(""),2000);}},[user,uid]);
 const finishTour=()=>{setShowTour(false);try{localStorage.setItem(`stockly-tour-${uid}`,"1");}catch{}};
 const c=data.config;
 // Theme and accent come from INDIVIDUAL prefs, fallback to house config
@@ -791,4 +794,4 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="help"&&<HelpPage goTo={go}/>}
 {page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs}/>}
-</main></div>{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm}/></>);}
+</main></div>{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm} onUndo={undoRef.current?doUndo:null}/></>);}
