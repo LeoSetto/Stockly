@@ -64,7 +64,7 @@ const errMsg = {
 };
 
 // ─── Firestore helpers using house code ───
-export async function saveUserData(houseCode, data) {
+export async function saveHouseData(houseCode, data) {
   try {
     await setDoc(doc(db, "houses", houseCode, "data", "main"), {
       ...data,
@@ -73,11 +73,28 @@ export async function saveUserData(houseCode, data) {
   } catch (e) { console.error("Erro ao salvar:", e); }
 }
 
-export async function loadUserData(houseCode) {
+export async function loadHouseData(houseCode) {
   try {
     const s = await getDoc(doc(db, "houses", houseCode, "data", "main"));
     return s.exists() ? s.data() : null;
   } catch (e) { console.error("Erro ao carregar:", e); return null; }
+}
+
+// Personal data (per user, not shared)
+export async function savePersonalData(uid, data) {
+  try {
+    await setDoc(doc(db, "userProfiles", uid, "data", "main"), {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (e) { console.error("Erro ao salvar pessoal:", e); }
+}
+
+export async function loadPersonalData(uid) {
+  try {
+    const s = await getDoc(doc(db, "userProfiles", uid, "data", "main"));
+    return s.exists() ? s.data() : null;
+  } catch (e) { console.error("Erro ao carregar pessoal:", e); return null; }
 }
 
 // ─── User profile helpers ───
@@ -292,8 +309,10 @@ export default function AuthProvider({ children }) {
     return children({
       user,
       logout: doLogout,
-      saveUserData: (_, data) => saveUserData(houseCode, data),
-      loadUserData: (_) => loadUserData(houseCode),
+      saveHouseData: (data) => saveHouseData(houseCode, data),
+      loadHouseData: () => loadHouseData(houseCode),
+      savePersonalData: (data) => savePersonalData(user.uid, data),
+      loadPersonalData: () => loadPersonalData(user.uid),
       houseCode,
       houseInfo,
       leaveHouse,
