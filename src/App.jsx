@@ -19,6 +19,7 @@ const DEFAULT_CONFIG = {
   choreFreqs: ["Diário", "2x Semana", "Semanal", "Quinzenal", "Mensal"],
   expenseCategories: ["Mercado", "Hortifruti", "Limpeza", "Saúde", "Contas", "Lazer", "Transporte", "Outros"],
   cards: ["Dinheiro", "Pix", "Cartão Crédito", "Cartão Débito"],
+  incomeCategories: ["Salário", "VR", "Flash", "Freelance", "Extras"],
   mealDays: ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"],
   mealTypes: ["Café", "Almoço", "Lanche", "Jantar"],
   expiryWarnDays: 7,
@@ -40,18 +41,22 @@ const DEFAULT_DATA = {
     { id: 1, day: "Segunda", meal: "Almoço", recipe: "📝 Exemplo: Frango grelhado (pode apagar)" },
   ],
   expenses: [
-    { id: 1, desc: "📝 Exemplo: Supermercado (pode apagar)", amount: 150.00, category: "Mercado", date: "2026-03-20", paid: true, card: "Pix" },
-    { id: 2, desc: "📝 Exemplo: Conta de luz (pode apagar)", amount: 180.00, category: "Contas", date: "2026-03-10", paid: false, card: "" },
+    { id: 1, desc: "📝 Exemplo: Supermercado (pode apagar)", amount: 150.00, category: "Mercado", date: "2026-03-20", paid: true, card: "Pix", type: "variavel" },
+    { id: 2, desc: "📝 Exemplo: Conta de luz (pode apagar)", amount: 180.00, category: "Contas", date: "2026-03-10", paid: false, card: "", type: "fixo" },
+  ],
+  incomes: [
+    { id: 1, desc: "📝 Exemplo: Salário (pode apagar)", amount: 3000.00, category: "Salário", date: "2026-03-05", recurring: true },
   ],
   members: [],
   budget: 0,
+  budgetByCategory: {},
   priceHistory: [],
   shoppingTrips: [],
-  _version: 5,
+  _version: 6,
 };
 
 // ─── Data migration — upgrades old data to new format ───
-const DATA_VERSION = 5;
+const DATA_VERSION = 6;
 const migrateData = (d) => {
   if (!d) return d;
   const v = d._version || 1;
@@ -62,19 +67,24 @@ const migrateData = (d) => {
   m.priceHistory = (m.priceHistory || []).map(p => ({ ...p, unitPrice: p.unitPrice || p.price || 0, totalPrice: p.totalPrice || p.price || 0 }));
   m.grocery = (m.grocery || []).map(i => ({ ...i, price: i.price || 0, unitPrice: i.unitPrice || i.price || 0 }));
   // Add paid and card to expenses
-  m.expenses = (m.expenses || []).map(e => ({ ...e, paid: e.paid !== undefined ? e.paid : true, card: e.card || "" }));
+  m.expenses = (m.expenses || []).map(e => ({ ...e, paid: e.paid !== undefined ? e.paid : true, card: e.card || "", type: e.type || "variavel" }));
   // Add cards to config if missing
   if (!m.config.cards) m.config.cards = ["Dinheiro", "Pix", "Cartão Crédito", "Cartão Débito"];
+  // Add incomeCategories to config if missing
+  if (!m.config.incomeCategories) m.config.incomeCategories = ["Salário", "VR", "Flash", "Freelance", "Extras"];
   // v4→v5: Convert existing shoppingTrips to expenses (so they appear in Finanças)
   if (v < 5 && m.shoppingTrips && m.shoppingTrips.length > 0) {
     const existingDescs = (m.expenses || []).map(e => e.desc);
     m.shoppingTrips.forEach(trip => {
       const desc = "Compra " + new Date(trip.date + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
       if (trip.total > 0 && !existingDescs.includes(desc)) {
-        m.expenses.push({ id: Date.now() + Math.random(), desc, amount: trip.total, category: "Mercado", date: trip.date, paid: true, card: "", fromTrip: trip.id });
+        m.expenses.push({ id: Date.now() + Math.random(), desc, amount: trip.total, category: "Mercado", date: trip.date, paid: true, card: "", fromTrip: trip.id, type: "variavel" });
       }
     });
   }
+  // v5→v6: Add incomes array and budgetByCategory
+  if (!m.incomes) m.incomes = [];
+  if (!m.budgetByCategory) m.budgetByCategory = {};
   m._version = DATA_VERSION;
   return m;
 };
@@ -177,6 +187,7 @@ const ex=data.pantry.filter(i=>daysUntil(i.expiry)<0);
 const gp=data.grocery.filter(i=>!i.checked).length;const gd=data.grocery.filter(i=>i.checked).length;
 const ts=data.expenses.reduce((a,e)=>a+e.amount,0);const bp=data.budget>0?Math.min((ts/data.budget)*100,100):0;
 const pendingExp=data.expenses.filter(e=>!e.paid);const pendingTotal=pendingExp.reduce((a,e)=>a+e.amount,0);
+const totalIncome=(data.incomes||[]).reduce((a,i)=>a+i.amount,0);const saldo=totalIncome-ts;
 const gcs=(ch)=>{const d=Math.abs(daysUntil(ch.lastDone));const lim={"Diário":1,"2x Semana":3,"Semanal":7,"Quinzenal":14,"Mensal":30};return d>=(lim[ch.freq]||7);};const cdc=data.chores.filter(gcs).length;
 const ebc={};data.expenses.forEach(e=>{ebc[e.category]=(ebc[e.category]||0)+e.amount;});const mx=Math.max(...Object.values(ebc),1);const bcs=["#F0A050","#60A5FA","#4ADE80","#A78BFA","#FBBF24","#F87171","#34D399","#F472B6"];
 // Greeting based on time
@@ -192,7 +203,7 @@ return(<div>
 <div className="sc rd" style={cc()} onClick={()=>goTo("pantry")}><div className="sl">⚠ Validade</div><div className="sv" style={{color:(es.length+ex.length)>0?"var(--red)":"var(--green)"}}>{es.length+ex.length}</div><div className="sd">{ex.length>0?`${ex.length} vencido(s)`:es.length>0?`${es.length} vencendo`:"Tudo em dia!"}</div></div>
 <div className="sc bl" style={cc()} onClick={()=>goTo("grocery")}><div className="sl">{I.grocery} Compras</div><div className="sv">{gp}</div><div className="sd">{gp>0?`${gp} pendente${gp>1?"s":""}`:gd>0?`${gd} comprado${gd>1?"s":""}`:""}{gp===0&&gd===0?"lista vazia":""}</div></div>
 <div className="sc pp" style={cc()} onClick={()=>goTo("chores")}><div className="sl">{I.chores} Tarefas</div><div className="sv" style={{color:cdc>0?"var(--yellow)":"var(--green)"}}>{cdc}</div><div className="sd">{cdc>0?`${cdc} pendente${cdc>1?"s":""}`:data.chores.length>0?"Tudo em dia!":"nenhuma tarefa"}</div></div>
-<div className="sc gn" style={cc()} onClick={()=>goTo("budget")}><div className="sl">{I.budget} Finanças</div><div className="sv">{fmt(ts)}</div><div className="sd">de {fmt(data.budget||0)} ({bp.toFixed(0)}%){pendingTotal>0?` · ${fmt(pendingTotal)} pendente`:""}</div><div className="pb"><div className="pf" style={{width:`${bp}%`,background:bp>90?"var(--red)":bp>70?"var(--yellow)":"var(--green)"}}/></div></div>
+<div className="sc gn" style={cc()} onClick={()=>goTo("budget")}><div className="sl">{I.budget} Finanças</div><div className="sv" style={{color:saldo>=0?"var(--green)":"var(--red)"}}>{fmt(saldo)}</div><div className="sd">Receita: {fmt(totalIncome)} · Gastos: {fmt(ts)}{pendingTotal>0?` · ${fmt(pendingTotal)} pendente`:""}</div><div className="pb"><div className="pf" style={{width:`${bp}%`,background:bp>90?"var(--red)":bp>70?"var(--yellow)":"var(--green)"}}/></div></div>
 </div>
 <div className="dg">
 {/* Expiring items */}
@@ -256,7 +267,7 @@ const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:
 const openFinish=()=>{setFinishCard(c.cards?.[0]||"");setFinishPaid(false);setFinishModal(true);};
 const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard};
 const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"});
-const expense={id:Date.now()+1,desc,amount:total,category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id};
+const expense={id:Date.now()+1,desc,amount:total,category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id,type:"variavel"};
 setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[expense,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
 toast(`Compra finalizada! ${fmt(total)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
 const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
@@ -404,52 +415,153 @@ return(<div><div className="ph"><div className="pt">Cardápio Semanal</div><div 
 </Modal>}</div>);}
 
 // ─── BUDGET ───
-function BudgetPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[eb,setEb]=useState(false);const[bv,setBv]=useState(data.budget);const[filter,setFilter]=useState("all");
-const expenses=data.expenses||[];
-const ts=expenses.reduce((a,e)=>a+e.amount,0);
-const paidTotal=expenses.filter(e=>e.paid).reduce((a,e)=>a+e.amount,0);
-const pendingTotal=expenses.filter(e=>!e.paid).reduce((a,e)=>a+e.amount,0);
-const rem=data.budget-ts;const pct=data.budget>0?Math.min((ts/data.budget)*100,100):0;
+function BudgetPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
+const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState("all");
+const[incModal,setIncModal]=useState(null);const[incForm,setIncForm]=useState({});
+const[budgetCatModal,setBudgetCatModal]=useState(false);const[budgetCatForm,setBudgetCatForm]=useState({});
+const[eb,setEb]=useState(false);const[bv,setBv]=useState(data.budget);
+// Month filter
+const allMonths=()=>{const months=new Set();(data.expenses||[]).forEach(e=>{if(e.date)months.add(e.date.slice(0,7));});(data.incomes||[]).forEach(i=>{if(i.date)months.add(i.date.slice(0,7));});const arr=[...months].sort().reverse();if(arr.length===0)arr.push(today().slice(0,7));return arr;};
+const months=allMonths();
+const[selMonth,setSelMonth]=useState(()=>today().slice(0,7));
+const fmtMonth=(m)=>{const[y,mo]=m.split("-");const d=new Date(Number(y),Number(mo)-1);return d.toLocaleDateString(c.locale||"pt-BR",{month:"long",year:"numeric"});};
+// Filtered data by month
+const mExpenses=(data.expenses||[]).filter(e=>e.date&&e.date.startsWith(selMonth));
+const mIncomes=(data.incomes||[]).filter(i=>i.date&&i.date.startsWith(selMonth));
+// Totals
+const totalIncome=mIncomes.reduce((a,i)=>a+i.amount,0);
+const totalExpense=mExpenses.reduce((a,e)=>a+e.amount,0);
+const fixedTotal=mExpenses.filter(e=>e.type==="fixo").reduce((a,e)=>a+e.amount,0);
+const variableTotal=mExpenses.filter(e=>e.type==="variavel"||!e.type).reduce((a,e)=>a+e.amount,0);
+const paidTotal=mExpenses.filter(e=>e.paid).reduce((a,e)=>a+e.amount,0);
+const pendingTotal=mExpenses.filter(e=>!e.paid).reduce((a,e)=>a+e.amount,0);
+const saldo=totalIncome-totalExpense;
+const rem=data.budget-totalExpense;const pct=data.budget>0?Math.min((totalExpense/data.budget)*100,100):0;
+// By category
+const bc={};mExpenses.forEach(e=>{bc[e.category]=(bc[e.category]||0)+e.amount;});
+const budgetByCat=data.budgetByCategory||{};
+// By card
+const byCard={};mExpenses.forEach(e=>{const k=e.card||"Sem cartão";byCard[k]=(byCard[k]||0)+e.amount;});
+// Income by category
+const incByCat={};mIncomes.forEach(i=>{const k=i.category||"Outros";incByCat[k]=(incByCat[k]||0)+i.amount;});
+// Filtered expenses
+const filtered=filter==="all"?mExpenses:filter==="paid"?mExpenses.filter(e=>e.paid):filter==="pending"?mExpenses.filter(e=>!e.paid):filter==="fixo"?mExpenses.filter(e=>e.type==="fixo"):mExpenses.filter(e=>e.type==="variavel"||!e.type);
+// CRUD expenses
 const togglePaid=(id)=>{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===id?{...e,paid:!e.paid}:e)}));};
-const saveExpense=()=>{if(!form.desc||!form.amount)return;if(modal==="add"){setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false,card:form.card||""},...d.expenses]}));toast("Registrado");}else{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===form.id?{...form,amount:Number(form.amount)}:e)}));toast("Atualizado");}setModal(null);};
+const saveExpense=()=>{if(!form.desc||!form.amount)return;if(modal==="add"){setData(d=>({...d,expenses:[{id:Date.now(),desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false,card:form.card||"",type:form.type||"variavel"},...d.expenses]}));toast("Gasto registrado");}else{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===form.id?{...form,amount:Number(form.amount)}:e)}));toast("Gasto atualizado");}setModal(null);};
 const de=(id)=>{setData(d=>({...d,expenses:d.expenses.filter(e=>e.id!==id)}));toast("Removido");};
 const openEdit=(e)=>{setForm({...e});setModal("edit");};
 const sb=()=>{setData(d=>({...d,budget:Number(bv)}));setEb(false);toast("Orçamento atualizado");};
-const bc={};expenses.forEach(e=>{bc[e.category]=(bc[e.category]||0)+e.amount;});
-const filtered=filter==="all"?expenses:filter==="paid"?expenses.filter(e=>e.paid):expenses.filter(e=>!e.paid);
-return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div className="ps">Controle gastos domésticos</div></div>
+// CRUD incomes
+const saveIncome=()=>{if(!incForm.desc||!incForm.amount)return;if(incModal==="add"){setData(d=>({...d,incomes:[{id:Date.now(),desc:incForm.desc,amount:Number(incForm.amount),category:incForm.category||(c.incomeCategories||[])[0]||"Salário",date:incForm.date||today(),recurring:incForm.recurring||false},...(d.incomes||[])]}));toast("Receita registrada");}else{setData(d=>({...d,incomes:(d.incomes||[]).map(i=>i.id===incForm.id?{...incForm,amount:Number(incForm.amount)}:i)}));toast("Receita atualizada");}setIncModal(null);};
+const delInc=(id)=>{setData(d=>({...d,incomes:(d.incomes||[]).filter(i=>i.id!==id)}));toast("Receita removida");};
+// Budget by category
+const saveBudgetCat=()=>{const nb={};Object.entries(budgetCatForm).forEach(([k,v])=>{const n=Number(v);if(n>0)nb[k]=n;});setData(d=>({...d,budgetByCategory:nb}));setBudgetCatModal(false);toast("Orçamento por categoria salvo");};
+const openBudgetCat=()=>{const f={};c.expenseCategories.forEach(cat=>{f[cat]=budgetByCat[cat]||"";});setBudgetCatForm(f);setBudgetCatModal(true);};
+// Colors for cards
+const cardColors=["#60A5FA","#4ADE80","#F0A050","#A78BFA","#F87171","#FBBF24","#34D399","#F472B6"];
+return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div className="ps">Controle completo: receitas, gastos, saldo e orçamento</div></div>
+{/* Month selector */}
+<div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
+<button className="bi" onClick={()=>{const idx=months.indexOf(selMonth);if(idx<months.length-1)setSelMonth(months[idx+1]);}} style={{padding:8}}><Icon d={<polyline points="15 18 9 12 15 6"/>} size={18}/></button>
+<select value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{minWidth:200,fontSize:16,fontWeight:700,background:"var(--bg3)",textTransform:"capitalize"}}>{months.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}</select>
+<button className="bi" onClick={()=>{const idx=months.indexOf(selMonth);if(idx>0)setSelMonth(months[idx-1]);}} style={{padding:8}}><Icon d={<polyline points="9 18 15 12 9 6"/>} size={18}/></button>
+</div>
+
+{/* Summary cards */}
 <div className="sg">
-<div className="sc gn"><div className="sl">Orçamento</div><div className="sv" style={{display:"flex",alignItems:"center",gap:8}}>{fmt(data.budget)}<button className="bi" style={{padding:4}} onClick={()=>{setBv(data.budget);setEb(true);}}>{I.edit}</button></div></div>
-<div className="sc ac"><div className="sl">Total Comprometido</div><div className="sv">{fmt(ts)}</div><div className="pb"><div className="pf" style={{width:`${pct}%`,background:pct>90?"var(--red)":pct>70?"var(--yellow)":"var(--green)"}}/></div></div>
-<div className="sc bl"><div className="sl">Restante</div><div className="sv" style={{color:rem<0?"var(--red)":"var(--green)"}}>{fmt(rem)}</div></div>
-<div className="sc gn"><div className="sl">Pago</div><div className="sv" style={{color:"var(--green)"}}>{fmt(paidTotal)}</div></div>
-<div className="sc rd"><div className="sl">Pendente</div><div className="sv" style={{color:"var(--yellow)"}}>{fmt(pendingTotal)}</div><div className="sd">{expenses.filter(e=>!e.paid).length} gasto{expenses.filter(e=>!e.paid).length!==1?"s":""}</div></div>
+<div className="sc gn"><div className="sl">📥 Entradas</div><div className="sv" style={{color:"var(--green)"}}>{fmt(totalIncome)}</div><div className="sd">{mIncomes.length} receita{mIncomes.length!==1?"s":""}</div></div>
+<div className="sc rd"><div className="sl">📤 Gastos</div><div className="sv" style={{color:"var(--red)"}}>{fmt(totalExpense)}</div><div className="sd">{fmt(fixedTotal)} fixos · {fmt(variableTotal)} variáveis</div></div>
+<div className="sc" style={{"--saldo-color":saldo>=0?"var(--green)":"var(--red)"}}><div className="sl" style={{display:"flex",alignItems:"center",gap:6}}>💰 Saldo Mensal</div><div className="sv" style={{color:saldo>=0?"var(--green)":"var(--red)"}}>{saldo>=0?"+":""}{fmt(saldo)}</div>
+<div style={{marginTop:8,height:6,background:"var(--bg4)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:totalIncome>0?`${Math.min((totalExpense/totalIncome)*100,100)}%`:"0%",background:totalIncome>0&&totalExpense/totalIncome>0.9?"var(--red)":totalExpense/totalIncome>0.7?"var(--yellow)":"var(--green)",borderRadius:3,transition:"width .4s"}}/></div>
+<div className="sd" style={{marginTop:4}}>{totalIncome>0?`${((totalExpense/totalIncome)*100).toFixed(0)}% da receita comprometida`:"Sem receitas registradas"}</div></div>
+<div className="sc bl"><div className="sl">Orçamento</div><div className="sv" style={{display:"flex",alignItems:"center",gap:8}}>{fmt(data.budget)}<button className="bi" style={{padding:4}} onClick={()=>{setBv(data.budget);setEb(true);}}>{I.edit}</button></div><div className="pb"><div className="pf" style={{width:`${pct}%`,background:pct>90?"var(--red)":pct>70?"var(--yellow)":"var(--green)"}}/></div><div className="sd">Restante: <span style={{color:rem<0?"var(--red)":"var(--green)",fontWeight:600}}>{fmt(rem)}</span></div></div>
+<div className="sc gn"><div className="sl">✅ Pago</div><div className="sv" style={{color:"var(--green)"}}>{fmt(paidTotal)}</div></div>
+<div className="sc pp"><div className="sl">⏳ Pendente</div><div className="sv" style={{color:"var(--yellow)"}}>{fmt(pendingTotal)}</div><div className="sd">{mExpenses.filter(e=>!e.paid).length} gasto{mExpenses.filter(e=>!e.paid).length!==1?"s":""}</div></div>
 </div>
-{Object.keys(bc).length>0&&<div className="card" style={{marginBottom:20}}><div className="ct">Por Categoria</div><div style={{display:"flex",flexWrap:"wrap",gap:12}}>{Object.entries(bc).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>(<div key={cat} style={{background:"var(--bg3)",borderRadius:8,padding:"10px 16px",flex:"1 1 140px"}}><div style={{fontSize:11,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1}}>{cat}</div><div style={{fontSize:18,fontWeight:700,marginTop:4}}>{fmt(val)}</div><div style={{fontSize:11,color:"var(--text3)"}}>{ts>0?((val/ts)*100).toFixed(0):0}%</div></div>))}</div></div>}
-<div className="tb"><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:today(),paid:false,card:c.cards?.[0]||""});setModal("add");}}>{I.plus} Novo Gasto</button>
-<div style={{display:"flex",gap:4}}>{[{k:"all",l:"Todos"},{k:"pending",l:"Pendentes"},{k:"paid",l:"Pagos"}].map(f=><button key={f.k} className={`btn ${filter===f.k?"bp":"bg"} bs`} onClick={()=>setFilter(f.k)}>{f.l}</button>)}</div>
+
+{/* Incomes section */}
+<div className="card"><div className="ct" style={{justifyContent:"space-between"}}>
+<span style={{display:"flex",alignItems:"center",gap:8}}>📥 Receitas / Entradas</span>
+<button className="btn bp bs" onClick={()=>{setIncForm({desc:"",amount:"",category:(c.incomeCategories||[])[0]||"Salário",date:selMonth+"-05",recurring:false});setIncModal("add");}}>{I.plus} Nova Receita</button>
 </div>
-<div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th style={{width:40}}>Pago</th><th>Descrição</th><th>Valor</th><th>Cartão</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
-{filtered.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(<tr key={e.id} style={{borderLeft:e.paid?"3px solid var(--green)":"3px solid var(--yellow)"}}>
+{/* Income by category summary */}
+{Object.keys(incByCat).length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>{Object.entries(incByCat).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>(<div key={cat} style={{background:"var(--green-bg)",borderRadius:8,padding:"8px 14px",flex:"0 1 auto"}}><div style={{fontSize:11,color:"var(--green)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>{cat}</div><div style={{fontSize:16,fontWeight:700,color:"var(--green)"}}>{fmt(val)}</div></div>))}</div>}
+{mIncomes.length===0?<div style={{color:"var(--text3)",fontSize:13,padding:"12px 0"}}>Nenhuma receita em {fmtMonth(selMonth)}</div>:
+<div style={{overflowX:"auto"}}><table><thead><tr><th>Descrição</th><th>Valor</th><th>Categoria</th><th>Data</th><th>Recorrente</th><th></th></tr></thead><tbody>
+{mIncomes.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>(<tr key={i.id}><td className="in">{i.desc}</td><td style={{fontWeight:600,color:"var(--green)"}}>{fmt(i.amount)}</td><td><span className="tg tg-g">{i.category}</span></td><td style={{color:"var(--text3)"}}>{new Date(i.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td><td>{i.recurring?<span className="tg tg-b">Sim</span>:<span style={{color:"var(--text3)"}}>—</span>}</td><td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>{setIncForm({...i});setIncModal("edit");}} title="Editar">{I.edit}</button><button className="bi" onClick={()=>delInc(i.id)} title="Remover">{I.trash}</button></div></td></tr>))}
+</tbody></table></div>}
+</div>
+
+{/* Budget by category */}
+<div className="card"><div className="ct" style={{justifyContent:"space-between"}}>
+<span style={{display:"flex",alignItems:"center",gap:8}}>📊 Orçamento por Categoria</span>
+<button className="btn bg bs" onClick={openBudgetCat}>{I.edit} Editar Orçamentos</button>
+</div>
+{c.expenseCategories.filter(cat=>bc[cat]||budgetByCat[cat]).length===0?<div style={{color:"var(--text3)",fontSize:13}}>Defina orçamentos por categoria e acompanhe os gastos reais</div>:
+<div style={{display:"flex",flexDirection:"column",gap:10}}>
+{c.expenseCategories.filter(cat=>bc[cat]||budgetByCat[cat]).map(cat=>{const real=bc[cat]||0;const plan=budgetByCat[cat]||0;const catPct=plan>0?Math.min((real/plan)*100,100):0;return(<div key={cat} style={{background:"var(--bg3)",borderRadius:10,padding:"12px 16px"}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={{fontSize:14,fontWeight:600}}>{cat}</span><div style={{display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:13,color:plan>0&&real>plan?"var(--red)":"var(--text2)"}}>{fmt(real)}{plan>0&&<span style={{color:"var(--text3)"}}> / {fmt(plan)}</span>}</span>{plan>0&&<span style={{fontSize:12,fontWeight:600,color:catPct>90?"var(--red)":catPct>70?"var(--yellow)":"var(--green)"}}>{catPct.toFixed(0)}%</span>}</div></div>
+{plan>0&&<div className="pb" style={{marginTop:0}}><div className="pf" style={{width:`${catPct}%`,background:catPct>90?"var(--red)":catPct>70?"var(--yellow)":"var(--green)"}}/></div>}
+</div>);})}
+</div>}
+</div>
+
+{/* Totals by card */}
+{Object.keys(byCard).length>0&&<div className="card"><div className="ct">💳 Totais por Cartão</div>
+<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{Object.entries(byCard).sort((a,b)=>b[1]-a[1]).map(([card,val],idx)=>(<div key={card} style={{background:"var(--bg3)",borderRadius:10,padding:"14px 18px",flex:"1 1 160px",borderLeft:`4px solid ${cardColors[idx%cardColors.length]}`}}>
+<div style={{fontSize:12,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>{card}</div>
+<div style={{fontSize:20,fontWeight:700,marginTop:4}}>{fmt(val)}</div>
+<div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{totalExpense>0?((val/totalExpense)*100).toFixed(0):0}% do total</div>
+</div>))}</div></div>}
+
+{/* Expenses list */}
+<div className="tb" style={{marginTop:4}}><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:selMonth+"-"+new Date().toISOString().slice(8,10),paid:false,card:c.cards?.[0]||"",type:"variavel"});setModal("add");}}>{I.plus} Novo Gasto</button>
+<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[{k:"all",l:"Todos"},{k:"fixo",l:"Fixos"},{k:"variavel",l:"Variáveis"},{k:"pending",l:"Pendentes"},{k:"paid",l:"Pagos"}].map(f=><button key={f.k} className={`btn ${filter===f.k?"bp":"bg"} bs`} onClick={()=>setFilter(f.k)}>{f.l}</button>)}</div>
+</div>
+<div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th style={{width:40}}>Pago</th><th>Descrição</th><th>Valor</th><th>Tipo</th><th>Cartão</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
+{filtered.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(<tr key={e.id} style={{borderLeft:e.type==="fixo"?"3px solid var(--blue)":"3px solid var(--accent)"}}>
 <td><div style={{width:24,height:24,borderRadius:6,border:`2px solid ${e.paid?"var(--green)":"var(--yellow)"}`,background:e.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .2s"}} onClick={()=>togglePaid(e.id)}>{e.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div></td>
 <td className="in" style={{opacity:e.paid?0.6:1}}>{e.desc}</td>
 <td style={{fontWeight:600,color:e.paid?"var(--green)":"var(--yellow)"}}>{fmt(e.amount)}</td>
-<td>{e.card?<span className="tg tg-b">{e.card}</span>:<span style={{color:"var(--text3)",fontSize:12}}>—</span>}</td>
+<td><span className={`tg ${e.type==="fixo"?"tg-b":"tg-n"}`}>{e.type==="fixo"?"Fixo":"Variável"}</span></td>
+<td>{e.card?<span className="tg tg-p">{e.card}</span>:<span style={{color:"var(--text3)",fontSize:12}}>—</span>}</td>
 <td><span className="tg tg-n">{e.category}</span></td>
 <td style={{color:"var(--text3)"}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td>
 <td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>openEdit(e)} title="Editar">{I.edit}</button><button className="bi" onClick={()=>de(e.id)} title="Remover">{I.trash}</button></div></td>
 </tr>))}
+{filtered.length===0&&<tr><td colSpan={8} style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhum gasto{filter!=="all"?` ${filter==="fixo"?"fixo":filter==="variavel"?"variável":filter==="pending"?"pendente":"pago"}`:""} neste mês</td></tr>}
 </tbody></table></div></div>
+
+{/* Expense modal */}
 {modal&&<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>setModal(null)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><input type="number" step="0.01" value={form.amount||""} onChange={e=>setForm({...form,amount:e.target.value})}/></div></div>
-<div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div>
-<div className="fg"><label className="fl">Cartão / Pagamento</label><select value={form.card||""} onChange={e=>setForm({...form,card:e.target.value})}><option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div></div>
-<div className="fr"><div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
+<div className="fr"><div className="fg"><label className="fl">Tipo</label><select value={form.type||"variavel"} onChange={e=>setForm({...form,type:e.target.value})}><option value="fixo">Fixo</option><option value="variavel">Variável</option></select></div>
+<div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div></div>
+<div className="fr"><div className="fg"><label className="fl">Cartão / Pagamento</label><select value={form.card||""} onChange={e=>setForm({...form,card:e.target.value})}><option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div>
+<div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
 <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4,marginBottom:8,cursor:"pointer"}} onClick={()=>setForm({...form,paid:!form.paid})}>
 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${form.paid?"var(--green)":"var(--yellow)"}`,background:form.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{form.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
 <span style={{fontSize:14,color:form.paid?"var(--green)":"var(--yellow)",fontWeight:500}}>{form.paid?"Já pago":"Ainda não pago (cartão, fatura, etc)"}</span>
 </div>
 <div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={saveExpense}>Salvar</button></div>
+</Modal>}
+{/* Income modal */}
+{incModal&&<Modal title={incModal==="add"?"Nova Receita":"Editar Receita"} onClose={()=>setIncModal(null)}>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={incForm.desc||""} onChange={e=>setIncForm({...incForm,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><input type="number" step="0.01" value={incForm.amount||""} onChange={e=>setIncForm({...incForm,amount:e.target.value})}/></div></div>
+<div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={incForm.category||(c.incomeCategories||[])[0]||""} onChange={e=>setIncForm({...incForm,category:e.target.value})}>{(c.incomeCategories||[]).map(ct=><option key={ct}>{ct}</option>)}</select></div>
+<div className="fg"><label className="fl">Data</label><input type="date" value={incForm.date||today()} onChange={e=>setIncForm({...incForm,date:e.target.value})}/></div></div>
+<div style={{display:"flex",alignItems:"center",gap:10,marginTop:4,marginBottom:8,cursor:"pointer"}} onClick={()=>setIncForm({...incForm,recurring:!incForm.recurring})}>
+<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${incForm.recurring?"var(--blue)":"var(--border2)"}`,background:incForm.recurring?"var(--blue)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{incForm.recurring&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
+<span style={{fontSize:14,color:incForm.recurring?"var(--blue)":"var(--text3)",fontWeight:500}}>{incForm.recurring?"Receita recorrente (todo mês)":"Receita única"}</span>
+</div>
+<div className="ma"><button className="btn bg" onClick={()=>setIncModal(null)}>Cancelar</button><button className="btn bp" onClick={saveIncome}>Salvar</button></div>
+</Modal>}
+{/* Budget by category modal */}
+{budgetCatModal&&<Modal title="Orçamento por Categoria" onClose={()=>setBudgetCatModal(false)}>
+<div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Defina quanto planeja gastar em cada categoria neste mês. Deixe em branco para não limitar.</div>
+{c.expenseCategories.map(cat=>(<div className="fr" key={cat} style={{marginBottom:8}}><div className="fg"><label className="fl">{cat}</label><input type="number" step="0.01" value={budgetCatForm[cat]||""} onChange={e=>setBudgetCatForm({...budgetCatForm,[cat]:e.target.value})} placeholder="0.00"/></div></div>))}
+<div className="ma"><button className="btn bg" onClick={()=>setBudgetCatModal(false)}>Cancelar</button><button className="btn bp" onClick={saveBudgetCat}>Salvar</button></div>
 </Modal>}
 {eb&&<Modal title="Editar Orçamento" onClose={()=>setEb(false)}><div className="fg"><label className="fl">Orçamento Mensal</label><input type="number" value={bv} onChange={e=>setBv(e.target.value)} autoFocus/></div><div className="ma"><button className="btn bg" onClick={()=>setEb(false)}>Cancelar</button><button className="btn bp" onClick={sb}>Salvar</button></div></Modal>}
 </div>);}
@@ -576,12 +688,13 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">{I.chores} Cômodos da Casa</div><TagEditor items={c.rooms} onAdd={v=>al("rooms",v)} onRemove={v=>rl("rooms",v)}/></div>
 <div className="card"><div className="sst">🔄 Frequências de Tarefas</div><TagEditor items={c.choreFreqs} onAdd={v=>al("choreFreqs",v)} onRemove={v=>rl("choreFreqs",v)}/></div>
 <div className="card"><div className="sst">💳 Cartões / Formas de Pagamento</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Usados nas compras e finanças</p><TagEditor items={c.cards||[]} onAdd={v=>al("cards",v)} onRemove={v=>rl("cards",v)}/></div>
+<div className="card"><div className="sst">📥 Categorias de Receita</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Salário, VR, freelance, extras...</p><TagEditor items={c.incomeCategories||[]} onAdd={v=>al("incomeCategories",v)} onRemove={v=>rl("incomeCategories",v)}/></div>
 <div className="card"><div className="sst">{I.meals} Dias do Cardápio</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Quais dias aparecem no planejador</p><TagEditor items={c.mealDays} onAdd={v=>al("mealDays",v)} onRemove={v=>rl("mealDays",v)}/></div>
 <div className="card"><div className="sst">🍽 Tipos de Refeição</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Café, almoço, jantar... ou o que quiser</p><TagEditor items={c.mealTypes} onAdd={v=>al("mealTypes",v)} onRemove={v=>rl("mealTypes",v)}/></div></>}
 
 {tab==="dados"&&<><div className="card"><div className="sst">{I.download} Exportar & Importar</div><p style={{fontSize:13,color:"var(--text2)",marginBottom:16,lineHeight:1.6}}>Backup completo: configurações, itens, tarefas, gastos e cardápio.</p><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="btn bp" onClick={exp}>{I.download} Exportar (JSON)</button><button className="btn bg" onClick={imp}>{I.upload} Importar</button></div></div>
 <div className="card"><div className="sst" style={{color:"var(--red)"}}>⚠ Zona de Perigo</div><p style={{fontSize:13,color:"var(--text3)",marginBottom:12}}>Resetar tudo para o padrão. Irreversível.</p><button className="btn bd" onClick={reset}>{I.trash} Resetar Tudo</button></div>
-<div className="card"><div className="ct">Sobre</div><p style={{fontSize:13,color:"var(--text2)",lineHeight:1.7}}>Lar Centro — Hub completo de gestão doméstica. 100% customizável.</p><p style={{fontSize:12,color:"var(--text3)",marginTop:12}}>v2.0</p></div></>}
+<div className="card"><div className="ct">Sobre</div><p style={{fontSize:13,color:"var(--text2)",lineHeight:1.7}}>Lar Centro — Hub completo de gestão doméstica. 100% customizável.</p><p style={{fontSize:12,color:"var(--text3)",marginTop:12}}>v3.0</p></div></>}
 </div>);}
 
 // ─── WELCOME TOUR ───
@@ -591,7 +704,7 @@ const TOUR_STEPS=[
 {icon:"🛒",title:"Lista de Compras",text:"Monte sua lista de compras aqui. Quando estiver no mercado, marque os itens como comprados — o app pergunta o preço e calcula o total. No final, clique em 'Finalizar Compra' e tudo vai automaticamente para a Despensa e as Finanças."},
 {icon:"✅",title:"Tarefas",text:"Organize a limpeza e manutenção da casa. Crie tarefas, defina quem é responsável, a frequência (diário, semanal...) e marque quando foi feita. O app mostra o que está atrasado."},
 {icon:"🍽️",title:"Cardápio",text:"Planeje as refeições da semana. Clique no dia e na refeição para definir o que vai cozinhar. Você pode personalizar os dias e tipos de refeição (café, almoço, lanche, jantar...)."},
-{icon:"💰",title:"Finanças",text:"Controle os gastos da casa. Cada gasto tem categoria, cartão de pagamento e status (pago ou pendente). Compras do mercado aparecem aqui automaticamente. Defina um orçamento mensal e acompanhe o quanto já gastou."},
+{icon:"💰",title:"Finanças",text:"Painel financeiro completo! Registre receitas (salário, VR, extras) e gastos (fixos e variáveis). Veja o saldo mensal, orçamento por categoria, totais por cartão e navegue mês a mês. Compras do mercado aparecem aqui automaticamente."},
 {icon:"📈",title:"Preços",text:"Acompanhe a evolução dos preços dos produtos ao longo do tempo. O app registra automaticamente quando você compra algo e mostra gráficos de variação — sabe aquele arroz que subiu? Aqui você vê!"},
 {icon:"⚙️",title:"Tudo é customizável!",text:"Vá em Configurações para personalizar: nome da casa, tema, cores, categorias, cômodos, cartões de pagamento, tipos de refeição... Tudo pode ser mudado do seu jeito."},
 {icon:"👨‍👩‍👧‍👦",title:"Compartilhe com a família",text:"Em Configurações → Casa, você encontra o código da sua casa. Mande para sua família — cada pessoa faz login com a própria conta e digita o código. Todos compartilham os mesmos dados!"},
@@ -661,12 +774,14 @@ const sections=[
 "As próximas refeições também aparecem no Painel para consulta rápida.",
 ]},
 {id:"financas",icon:"💰",title:"Finanças",color:"#F87171",content:[
-"Controle todos os gastos da casa. Cada gasto tem: descrição, valor, categoria, cartão de pagamento, data e status (pago ou pendente).",
-"O checkbox na esquerda indica se já foi pago (verde) ou está pendente (amarelo). Clique nele para alternar.",
-"Compras finalizadas na Lista de Compras aparecem aqui automaticamente!",
-"Use os filtros 'Todos', 'Pendentes' e 'Pagos' para ver só o que precisa.",
-"Defina um orçamento mensal e acompanhe a barra de progresso. Fica verde quando está bem, amarelo quando está apertando e vermelho quando estourou.",
-"Para editar um gasto, clique no ícone de lápis. Pode mudar tudo: nome, valor, categoria, cartão, data e status.",
+"A aba Finanças é um painel financeiro completo, inspirado em planilhas de controle pessoal.",
+"Use o seletor de mês no topo para navegar entre os meses. Todos os dados (receitas, gastos, saldos) são filtrados pelo mês selecionado.",
+"Receitas/Entradas: registre salário, VR, flash, freelances e extras. Marque como recorrente para identificar receitas fixas.",
+"Gastos: cada gasto tem um tipo (fixo ou variável), categoria, cartão de pagamento e status pago/pendente. Use os filtros para ver só fixos, variáveis, pagos ou pendentes.",
+"Saldo Mensal: o card de saldo mostra Entradas - Gastos com indicador visual. Verde = sobrando, vermelho = no negativo.",
+"Orçamento por Categoria: defina um valor planejado para cada categoria e acompanhe a barra de progresso do real vs planejado.",
+"Totais por Cartão: veja quanto saiu de cada forma de pagamento (Pix, crédito, débito...) no mês.",
+"Compras finalizadas na Lista de Compras aparecem aqui automaticamente como gasto variável!",
 ]},
 {id:"precos",icon:"📈",title:"Preços",color:"#34D399",content:[
 "Aqui você vê a evolução dos preços de cada produto ao longo do tempo.",
