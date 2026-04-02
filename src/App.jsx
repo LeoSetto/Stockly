@@ -492,7 +492,7 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 </div>);}
 
 // ─── SETTINGS ───
-function SettingsPage({data,setData,toast,houseCode,houseInfo,leaveHouse,refreshHouseInfo,userPrefs,setUserPrefs}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
+function SettingsPage({data,setData,toast,houseCode,houseInfo,leaveHouse,refreshHouseInfo,userPrefs,setUserPrefs,mode,toggleMode}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
 const myTheme=userPrefs?.theme||c.theme||"dark";const myAccent=userPrefs?.accentColor||c.accentColor||"#F0A050";
 const uc=(k,v)=>setData(d=>({...d,config:{...d.config,[k]:v}}));
 const al=(k,v)=>{if(!v.trim()||c[k].includes(v.trim()))return;uc(k,[...c[k],v.trim()]);toast("Adicionado");};
@@ -511,7 +511,17 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">{I.budget} Moeda & Formato</div><div className="fr"><div className="fg"><label className="fl">Moeda</label><select value={c.currency} onChange={e=>uc("currency",e.target.value)}>{CURRENCIES.map(cur=><option key={cur.code} value={cur.code}>{cur.label}</option>)}</select></div><div className="fg"><label className="fl">Locale</label><select value={c.locale} onChange={e=>uc("locale",e.target.value)}><option value="pt-BR">Português (BR)</option><option value="en-US">English (US)</option><option value="es-ES">Español</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option><option value="ja-JP">日本語</option></select></div></div></div>
 <div className="card"><div className="sst">⚠ Alerta de Validade</div><div className="fg" style={{maxWidth:200}}><label className="fl">Dias de antecedência</label><input type="number" value={c.expiryWarnDays} onChange={e=>uc("expiryWarnDays",Number(e.target.value)||7)} min={1} max={90}/></div><div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Itens que vencem em até {c.expiryWarnDays} dias aparecerão como alerta</div></div></>}
 
-{tab==="casa"&&<><div className="card"><div className="sst">{I.users} Código da Casa</div>
+{tab==="casa"&&<>
+<div className="card" style={{background:mode==="shared"?"var(--accent-glow)":"var(--purple-bg)",borderColor:mode==="shared"?"var(--accent)":"var(--purple)"}}>
+<div className="sst" style={{color:mode==="shared"?"var(--accent)":"var(--purple)"}}>{mode==="shared"?`${I.users} Modo Compartilhado`:"👤 Modo Pessoal"}</div>
+<p style={{fontSize:13,color:"var(--text2)",lineHeight:1.6,marginBottom:16}}>{mode==="shared"?"Todos os dados (despensa, compras, tarefas, finanças...) são compartilhados com os membros da casa.":"Você está usando dados pessoais. Ninguém mais vê seus itens, compras ou finanças."}</p>
+<button onClick={toggleMode} style={{width:"100%",padding:"12px",borderRadius:10,fontSize:14,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'Outfit',sans-serif",background:mode==="shared"?"var(--purple)":"var(--accent)",color:"#fff",transition:"all .2s"}}>
+{mode==="shared"?"Trocar para Modo Pessoal":"Trocar para Modo Compartilhado"}
+</button>
+<p style={{fontSize:11,color:"var(--text3)",marginTop:8,textAlign:"center"}}>{mode==="shared"?"No modo pessoal, seus dados ficam separados da casa":"No modo compartilhado, você volta a ver os dados da casa"}</p>
+</div>
+
+{mode==="shared"&&<><div className="card"><div className="sst">{I.users} Código da Casa</div>
 <div style={{padding:"16px 24px",background:"var(--bg3)",border:"2px dashed var(--accent)",borderRadius:12,fontSize:28,fontWeight:800,letterSpacing:6,color:"var(--accent)",textAlign:"center",marginBottom:12,cursor:"pointer",userSelect:"all"}} onClick={()=>{navigator.clipboard?.writeText(houseCode||"");toast("Código copiado!");}} title="Clique para copiar">{houseCode||"—"}</div>
 <p style={{fontSize:12,color:"var(--text3)",marginBottom:8,textAlign:"center"}}>Compartilhe este código para que outras pessoas entrem na sua casa</p>
 </div>
@@ -530,7 +540,7 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst" style={{color:"var(--red)"}}>Sair da Casa</div>
 <p style={{fontSize:13,color:"var(--text3)",marginBottom:12}}>Você pode entrar novamente com o código. Seus dados continuam salvos na casa.</p>
 <button className="btn bd" onClick={leaveHouse}>{I.x} Sair desta casa</button>
-</div>
+</div></>}
 </>}
 
 {tab==="aparencia"&&<>
@@ -747,18 +757,20 @@ Baixar App
 }
 
 // ─── MAIN APP ───
-export default function App({ user, logout, saveUserData, loadUserData, houseCode, houseInfo, leaveHouse, refreshHouseInfo, saveUserPrefs, loadUserPrefs }){
+export default function App({ user, logout, saveHouseData, loadHouseData, savePersonalData, loadPersonalData, houseCode, houseInfo, leaveHouse, refreshHouseInfo, saveUserPrefs, loadUserPrefs }){
 const uid=user?.uid||"anon";
 const installHook=useInstallPrompt();
 const[showTour,setShowTour]=useState(()=>{try{return!localStorage.getItem(`stockly-tour-${uid}`);}catch{return true;}});
-const[data,setDataRaw]=useState(()=>{const l=load(uid);const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
 const[userPrefs,setUserPrefsRaw]=useState(()=>{try{const p=localStorage.getItem(`stockly-prefs-${uid}`);return p?JSON.parse(p):{};}catch{return{};}});
+const mode=userPrefs.mode||"shared"; // "shared" or "personal"
+const[data,setDataRaw]=useState(()=>{const l=load(uid);const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
 const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
-// Load house data from Firebase
-useEffect(()=>{if(user&&loadUserData){loadUserData(user.uid).then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated,uid);}else{
-// No data in Firebase — start fresh with defaults
-setDataRaw(DEFAULT_DATA);save(DEFAULT_DATA,uid);}});}},[user]);
+// Load data from Firebase based on mode
+useEffect(()=>{
+const loader=mode==="personal"?loadPersonalData:loadHouseData;
+if(user&&loader){loader().then(cd=>{if(cd){const migrated=migrateData({...DEFAULT_DATA,...cd,config:{...DEFAULT_CONFIG,...(cd.config||{})}});setDataRaw(migrated);save(migrated,uid);}else{setDataRaw(DEFAULT_DATA);save(DEFAULT_DATA,uid);}});}
+},[user,mode]);
 
 // Load individual prefs from Firebase
 useEffect(()=>{if(user&&loadUserPrefs){loadUserPrefs().then(p=>{if(p){setUserPrefsRaw(p);try{localStorage.setItem(`stockly-prefs-${uid}`,JSON.stringify(p));}catch{}}});}},[user]);
@@ -768,15 +780,17 @@ useEffect(()=>{try{setShowTour(!localStorage.getItem(`stockly-tour-${uid}`));}ca
 
 const undoRef=useRef(null);const toastTimer=useRef(null);
 
-const setData=useCallback((u)=>{setDataRaw(p=>{undoRef.current=p;const n=typeof u==="function"?u(p):u;save(n,uid);if(user&&saveUserData)saveUserData(user.uid,n);return n;});},[user,uid]);
+const saveFn=mode==="personal"?savePersonalData:saveHouseData;
+const setData=useCallback((u)=>{setDataRaw(p=>{undoRef.current=p;const n=typeof u==="function"?u(p):u;save(n,uid);if(user&&saveFn)saveFn(n);return n;});},[user,uid,saveFn]);
 
 const setUserPrefs=useCallback((updater)=>{setUserPrefsRaw(prev=>{const n=typeof updater==="function"?updater(prev):updater;try{localStorage.setItem(`stockly-prefs-${uid}`,JSON.stringify(n));}catch{}if(user&&saveUserPrefs)saveUserPrefs(n);return n;});},[user,uid]);
 
+const toggleMode=useCallback(()=>{const newMode=mode==="shared"?"personal":"shared";setUserPrefs(p=>({...p,mode:newMode}));toast(newMode==="personal"?"Modo pessoal ativado":"Modo compartilhado ativado");},[mode]);
+
 const toast=useCallback((m)=>{setTm(m);if(toastTimer.current)clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>{setTm("");undoRef.current=null;},4000);},[]);
-const doUndo=useCallback(()=>{if(undoRef.current){setDataRaw(undoRef.current);save(undoRef.current,uid);if(user&&saveUserData)saveUserData(user.uid,undoRef.current);undoRef.current=null;setTm("Ação desfeita!");setTimeout(()=>setTm(""),2000);}},[user,uid]);
+const doUndo=useCallback(()=>{if(undoRef.current){setDataRaw(undoRef.current);save(undoRef.current,uid);if(user&&saveFn)saveFn(undoRef.current);undoRef.current=null;setTm("Ação desfeita!");setTimeout(()=>setTm(""),2000);}},[user,uid,saveFn]);
 const finishTour=()=>{setShowTour(false);try{localStorage.setItem(`stockly-tour-${uid}`,"1");}catch{}};
 const c=data.config;
-// Theme and accent come from INDIVIDUAL prefs, fallback to house config
 const myTheme=userPrefs.theme||c.theme||"dark";
 const myAccent=userPrefs.accentColor||c.accentColor||"#F0A050";
 const tv=THEMES[myTheme]||THEMES.dark;const ac=myAccent;
@@ -784,8 +798,11 @@ const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.
 const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"help",label:"Ajuda",icon:I.help},{id:"settings",label:"Configurações",icon:I.settings}];
 const go=(id)=>{setPage(id);setSo(false);};
 return(<><style>{getCSS(tv,ac)}</style><div className="app">
-<div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span></div>
-<nav className={`sb ${so?"open":""}`}><div className="sb-h"><div className="logo">{c.houseName}</div><div className="logo-s">gestão doméstica</div></div><div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
+<div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span>{mode==="personal"&&<span style={{marginLeft:8,fontSize:10,background:"var(--purple-bg)",color:"var(--purple)",padding:"2px 8px",borderRadius:10,fontWeight:600}}>Pessoal</span>}</div>
+<nav className={`sb ${so?"open":""}`}><div className="sb-h"><div className="logo">{c.houseName}</div><div className="logo-s">{mode==="personal"?"modo pessoal":"gestão doméstica"}</div></div>
+{/* Mode toggle in sidebar */}
+<div style={{padding:"0 12px 8px"}}><button onClick={toggleMode} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--border)",background:mode==="shared"?"var(--accent-glow)":"var(--purple-bg)",color:mode==="shared"?"var(--accent)":"var(--purple)",fontSize:12,fontWeight:600,fontFamily:"'Outfit',sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .2s"}}>{mode==="shared"?<>{I.users} Compartilhado</>:<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Pessoal</>}</button></div>
+<div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
 <SidebarInstallBtn installHook={installHook}/>
 <div className="sb-f"><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{user?user.displayName||user.email:data.members.join(", ")}</span>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
 {so&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}} onClick={()=>setSo(false)}/>}
@@ -798,5 +815,5 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="help"&&<HelpPage goTo={go}/>}
-{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs}/>}
+{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs} mode={mode} toggleMode={toggleMode}/>}
 </main></div>{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm} onUndo={undoRef.current?doUndo:null}/></>);}
