@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
   mealDays: ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"],
   mealTypes: ["Café", "Almoço", "Lanche", "Jantar"],
   expiryWarnDays: 7,
+  variableWeightCategories: ["Hortifruti"],
 };
 
 const DEFAULT_DATA = {
@@ -69,6 +70,7 @@ const migrateData = (d) => {
   m.expenses = (m.expenses || []).map(e => ({ ...e, paid: e.paid !== undefined ? e.paid : true, card: e.card || "", type: e.type || "variavel" }));
   if (!m.config.cards) m.config.cards = ["Dinheiro", "Pix", "Cartão Crédito", "Cartão Débito"];
   if (!m.config.incomeCategories) m.config.incomeCategories = ["Salário", "VR", "Flash", "Freelance", "Extras"];
+  if (!m.config.variableWeightCategories) m.config.variableWeightCategories = ["Hortifruti"];
   if (v < 5 && m.shoppingTrips && m.shoppingTrips.length > 0) {
     const existingDescs = (m.expenses || []).map(e => e.desc);
     m.shoppingTrips.forEach(trip => {
@@ -317,11 +319,28 @@ const COUNTABLE_UNITS=["un","pacote","lata","caixa","dúzia","fatia","sachê"];
 const isCountable=(u)=>COUNTABLE_UNITS.includes(u);
 
 function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");const[finishModal,setFinishModal]=useState(false);const[finishCard,setFinishCard]=useState(c.cards?.[0]||"");const[finishPaid,setFinishPaid]=useState(false);
+const[lots,setLots]=useState([]);const[lotsMode,setLotsMode]=useState(false);
+const vwCats=c.variableWeightCategories||[];
+const isVW=(cat)=>vwCats.includes(cat);
 const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
 const calcTotal=(price,qty,unit)=>{const p=Number(price)||0;return isCountable(unit)?p*(Number(qty)||1):p;};
-const toggle=(id)=>{const item=data.grocery.find(i=>i.id===id);if(item&&!item.checked){setPriceModal(item);setUnitPriceVal(item.unitPrice||"");}else{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));}};
-const confirmCheck=()=>{if(!priceModal)return;const up=Number(unitPriceVal)||0;const cnt=isCountable(priceModal.unit);const tp=calcTotal(up,priceModal.qty,priceModal.unit);setData(d=>{const newPH=up>0?[...(d.priceHistory||[]),{id:Date.now(),name:priceModal.name,unitPrice:up,totalPrice:tp,qty:priceModal.qty,unit:priceModal.unit,date:today()}]:d.priceHistory||[];return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,unitPrice:up,price:tp}:i),priceHistory:newPH};});if(up>0){const label=cnt&&priceModal.qty>1?`${priceModal.name}: ${fmt(up)} × ${priceModal.qty} = ${fmt(tp)}`:`${priceModal.name}: ${fmt(up)}`;toast(label);}else toast("Item marcado");setPriceModal(null);setUnitPriceVal("");};
-const skipPrice=()=>{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true}:i)}));toast("Item marcado");setPriceModal(null);setUnitPriceVal("");};
+const toggle=(id)=>{const item=data.grocery.find(i=>i.id===id);if(item&&!item.checked){setPriceModal(item);setUnitPriceVal(item.unitPrice||"");if(isVW(item.category)){setLotsMode(true);setLots([{id:1,weight:"",price:""}]);}else{setLotsMode(false);setLots([]);}}else{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===id?{...i,checked:!i.checked}:i)}));}};
+const addLot=()=>setLots(l=>[...l,{id:Date.now(),weight:"",price:""}]);
+const removeLot=(lid)=>setLots(l=>l.filter(x=>x.id!==lid));
+const updateLot=(lid,field,val)=>setLots(l=>l.map(x=>x.id===lid?{...x,[field]:val}:x));
+const lotsTotal=lots.reduce((a,l)=>a+(Number(l.price)||0),0);
+const lotsTotalWeight=lots.reduce((a,l)=>a+(Number(l.weight)||0),0);
+const confirmCheck=()=>{if(!priceModal)return;
+if(lotsMode&&lots.some(l=>Number(l.price)>0)){
+// Lots mode: save each lot as a price entry, sum as total
+const totalP=lotsTotal;const totalW=lotsTotalWeight;const avgPrice=totalW>0?totalP/totalW:totalP;
+setData(d=>{const newPH=[...(d.priceHistory||[])];lots.forEach(l=>{if(Number(l.price)>0){newPH.push({id:Date.now()+Math.random(),name:priceModal.name,unitPrice:Number(l.price),totalPrice:Number(l.price),qty:Number(l.weight)||1,unit:priceModal.unit,date:today(),isLot:true});}});return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,unitPrice:avgPrice,price:totalP,lots:lots.filter(l=>Number(l.price)>0).map(l=>({weight:Number(l.weight)||0,price:Number(l.price)||0}))}:i),priceHistory:newPH};});
+const validLots=lots.filter(l=>Number(l.price)>0);
+toast(`${priceModal.name}: ${validLots.length} lote${validLots.length>1?"s":""} = ${fmt(totalP)}`);
+}else{
+const up=Number(unitPriceVal)||0;const cnt=isCountable(priceModal.unit);const tp=calcTotal(up,priceModal.qty,priceModal.unit);setData(d=>{const newPH=up>0?[...(d.priceHistory||[]),{id:Date.now(),name:priceModal.name,unitPrice:up,totalPrice:tp,qty:priceModal.qty,unit:priceModal.unit,date:today()}]:d.priceHistory||[];return{...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true,unitPrice:up,price:tp}:i),priceHistory:newPH};});if(up>0){const label=cnt&&priceModal.qty>1?`${priceModal.name}: ${fmt(up)} × ${priceModal.qty} = ${fmt(tp)}`:`${priceModal.name}: ${fmt(up)}`;toast(label);}else toast("Item marcado");
+}setPriceModal(null);setUnitPriceVal("");setLots([]);setLotsMode(false);};
+const skipPrice=()=>{setData(d=>({...d,grocery:d.grocery.map(i=>i.id===priceModal.id?{...i,checked:true}:i)}));toast("Item marcado");setPriceModal(null);setUnitPriceVal("");setLots([]);setLotsMode(false);};
 const saveEditPrice=()=>{if(!editingPrice)return;const up=Number(editUP)||0;const tp=calcTotal(up,editingPrice.qty,editingPrice.unit);setData(d=>{const newGrocery=d.grocery.map(i=>i.id===editingPrice.id?{...i,unitPrice:up,price:tp}:i);let newPH=[...(d.priceHistory||[])];const existIdx=newPH.findIndex(p=>p.name===editingPrice.name&&p.date===today());if(up>0){if(existIdx>=0){newPH[existIdx]={...newPH[existIdx],unitPrice:up,totalPrice:tp};}else{newPH.push({id:Date.now(),name:editingPrice.name,unitPrice:up,totalPrice:tp,qty:editingPrice.qty,unit:editingPrice.unit,date:today()});}}return{...d,grocery:newGrocery,priceHistory:newPH};});toast("Preço atualizado");setEditingPrice(null);};
 const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
 const add=()=>{if(!form.name)return;setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:0,unitPrice:0}]}));toast("Adicionado");setModal(false);};
@@ -340,11 +359,12 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
 {pend.map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}<span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>);})}
 {done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
-{done.map(i=>{const cnt=isCountable(i.unit);return(<div className="cr" key={i.id} style={{opacity:.7}}>
+{done.map(i=>{const cnt=isCountable(i.unit);const hasLots=i.lots&&i.lots.length>1;return(<div className="cr" key={i.id} style={{opacity:.7,flexWrap:"wrap"}}>
 <div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>
 <span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>
-{i.price>0?<span style={{fontSize:12,color:"var(--green)",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setEditingPrice(i);setEditUP(i.unitPrice||"");}}>{cnt&&i.qty>1?`${fmt(i.unitPrice||0)} × ${i.qty} = `:""}{fmt(i.price)} {I.edit}</span>:<span style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}} onClick={()=>{setEditingPrice(i);setEditUP("");}}>+ preço</span>}
+{i.price>0?<span style={{fontSize:12,color:"var(--green)",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setEditingPrice(i);setEditUP(i.unitPrice||"");}}>{hasLots?`${i.lots.length} lotes = `:cnt&&i.qty>1?`${fmt(i.unitPrice||0)} × ${i.qty} = `:""}{fmt(i.price)} {I.edit}</span>:<span style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}} onClick={()=>{setEditingPrice(i);setEditUP("");}}>+ preço</span>}
 <button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button>
+{hasLots&&<div style={{width:"100%",paddingLeft:34,display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>{i.lots.map((l,idx)=>(<span key={idx} style={{fontSize:10,background:"var(--bg4)",padding:"2px 8px",borderRadius:8,color:"var(--text3)"}}>{l.weight>0?`${l.weight}${i.unit} `:""}{fmt(l.price)}</span>))}</div>}
 </div>);})}
 </div>
 {(data.shoppingTrips||[]).length>0&&<div className="card"><div className="ct">Últimas Compras</div>
@@ -363,11 +383,26 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div className="ma"><button className="btn bg" onClick={()=>setModal(false)}>Cancelar</button><button className="btn bp" onClick={add}>Adicionar</button></div>
 </Modal>}
 {priceModal&&<Modal title={`Preço: ${priceModal.name}`} onClose={()=>{skipPrice();}}>
+{/* Toggle lots mode for variable weight items */}
+{isVW(priceModal.category)&&<div style={{display:"flex",gap:8,marginBottom:16}}><button className={`btn ${!lotsMode?"bp":"bg"} bs`} onClick={()=>{setLotsMode(false);setLots([]);}}>Preço único</button><button className={`btn ${lotsMode?"bp":"bg"} bs`} onClick={()=>{setLotsMode(true);if(lots.length===0)setLots([{id:1,weight:"",price:""}]);}}>Vários lotes</button></div>}
+{!lotsMode&&<>
 <div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>{isCountable(priceModal.unit)?`Quanto custa cada ${priceModal.unit}? (opcional)`:`Quanto custa o ${priceModal.name} de ${priceModal.qty}${priceModal.unit}? (opcional)`}</div>
 <div className="fr"><div className="fg"><label className="fl">{isCountable(priceModal.unit)?"Preço por "+priceModal.unit:"Preço total"}</label><input type="number" step="0.01" value={unitPriceVal} onChange={e=>setUnitPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
 <div className="fg"><label className="fl">Item</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{priceModal.qty} {priceModal.unit}</div></div></div>
 {Number(unitPriceVal)>0&&isCountable(priceModal.unit)&&priceModal.qty>1&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(unitPriceVal)*(priceModal.qty||1))}</div>}
 {Number(unitPriceVal)>0&&!isCountable(priceModal.unit)&&<div style={{fontSize:14,fontWeight:600,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>{priceModal.name} ({priceModal.qty}{priceModal.unit}): {fmt(Number(unitPriceVal))}</div>}
+</>}
+{lotsMode&&<>
+<div style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>Registre cada bandeja/pote com seu peso e preço individual.</div>
+{lots.map((lot,idx)=>(<div key={lot.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+<span style={{fontSize:12,color:"var(--text3)",fontWeight:700,minWidth:24}}>{idx+1}.</span>
+<div style={{flex:1}}><input type="number" step="0.001" value={lot.weight} onChange={e=>updateLot(lot.id,"weight",e.target.value)} placeholder={`Peso (${priceModal.unit||"kg"})`} style={{fontSize:14}}/></div>
+<div style={{flex:1}}><input type="number" step="0.01" value={lot.price} onChange={e=>updateLot(lot.id,"price",e.target.value)} placeholder="Preço (R$)" style={{fontSize:14}} onKeyDown={e=>{if(e.key==="Enter"){if(idx===lots.length-1)addLot();}}}/></div>
+{lots.length>1&&<button className="bi" onClick={()=>removeLot(lot.id)} style={{padding:4,flexShrink:0}}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button>}
+</div>))}
+<button className="btn bg bs" onClick={addLot} style={{marginBottom:12}}>+ Adicionar lote</button>
+{lotsTotal>0&&<div style={{padding:"12px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:"var(--accent)"}}>{fmt(lotsTotal)}</div><div style={{fontSize:12,color:"var(--text3)",marginTop:4}}>{lots.filter(l=>Number(l.price)>0).length} lote{lots.filter(l=>Number(l.price)>0).length!==1?"s":""}{lotsTotalWeight>0?` · ${lotsTotalWeight.toFixed(2)}${priceModal.unit||"kg"} total`:""}</div></div>}
+</>}
 {lastUnitPrice(priceModal.name)&&<div style={{fontSize:12,color:"var(--text3)",marginTop:8}}>Último preço: {fmt(lastUnitPrice(priceModal.name))}</div>}
 <div className="ma"><button className="btn bg" onClick={skipPrice}>Pular</button><button className="btn bp" onClick={confirmCheck}>Registrar</button></div>
 </Modal>}
@@ -828,6 +863,7 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">🔄 Frequências de Tarefas</div><TagEditor items={c.choreFreqs} onAdd={v=>al("choreFreqs",v)} onRemove={v=>rl("choreFreqs",v)}/></div>
 <div className="card"><div className="sst">💳 Cartões / Formas de Pagamento</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Usados nas compras e finanças</p><TagEditor items={c.cards||[]} onAdd={v=>al("cards",v)} onRemove={v=>rl("cards",v)}/></div>
 <div className="card"><div className="sst">📥 Categorias de Receita</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Salário, VR, freelance, extras...</p><TagEditor items={c.incomeCategories||[]} onAdd={v=>al("incomeCategories",v)} onRemove={v=>rl("incomeCategories",v)}/></div>
+<div className="card"><div className="sst">⚖️ Categorias com Peso Variável</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Itens dessas categorias permitem registrar vários lotes com pesos e preços diferentes ao comprar (ex: 3 bandejas de morango)</p><TagEditor items={c.variableWeightCategories||[]} onAdd={v=>al("variableWeightCategories",v)} onRemove={v=>rl("variableWeightCategories",v)}/></div>
 <div className="card"><div className="sst">{I.meals} Dias do Cardápio</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Quais dias aparecem no planejador</p><TagEditor items={c.mealDays} onAdd={v=>al("mealDays",v)} onRemove={v=>rl("mealDays",v)}/></div>
 <div className="card"><div className="sst">🍽 Tipos de Refeição</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Café, almoço, jantar... ou o que quiser</p><TagEditor items={c.mealTypes} onAdd={v=>al("mealTypes",v)} onRemove={v=>rl("mealTypes",v)}/></div></>}
 
