@@ -426,14 +426,18 @@ const othTotal=payers.reduce((a,p)=>a+p.amount,0);
 const diff=Math.abs((Number(form.splitMyShare)||0)+othTotal-(Number(form.splitTotal)||0));
 const mismatch=diff>0.01;
 const hasPayers=payers.length>0;
+const[newPerson,setNewPerson]=useState("");
+const addPerson=()=>{const n=newPerson.trim();if(!n||n===myName||payers.find(p=>p.name===n))return;toggleSplitPayer(n);setNewPerson("");};
 return(<div style={{background:"var(--bg3)",borderRadius:10,padding:16}}>
 <div className="fr"><div className="fg"><label className="fl">Valor total da conta</label><input type="number" step="0.01" value={form.splitTotal||""} onChange={e=>{const st=Number(e.target.value)||0;const ot=payers.reduce((a,p)=>a+p.amount,0);setForm({...form,splitTotal:e.target.value,splitMyShare:Math.max(0,st-ot)});}}/></div>
 <div className="fg"><label className="fl">Minha parte ({myName})</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:16,fontWeight:700,color:"var(--accent)"}}>{fmt(Number(form.splitMyShare)||0)}</div></div></div>
 <div style={{marginTop:8}}><label className="fl" style={{marginBottom:8,display:"block"}}>Quem mais paga?</label>
-<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>{allMembers.filter(m=>m!==myName).map(m=>{const active=payers.find(p=>p.name===m);return(<button key={m} className={`btn ${active?"bp":"bg"} bs`} onClick={()=>toggleSplitPayer(m)} style={{borderRadius:20}}>{m}{active?" ✓":""}</button>);})}{allMembers.length<=1&&<div style={{fontSize:12,color:"var(--text3)"}}>Adicione membros em Configurações para dividir</div>}</div>
-{payers.map(p=>(<div key={p.name} className="fr" style={{marginBottom:6}}><div className="fg"><label className="fl">{p.name} paga</label><input type="number" step="0.01" value={p.amount||""} onChange={e=>setSplitPayerAmount(p.name,e.target.value)} placeholder="0.00"/></div></div>))}
+<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>{allMembers.filter(m=>m!==myName&&!payers.find(p=>p.name===m)).map(m=>(<button key={m} className="btn bg bs" onClick={()=>toggleSplitPayer(m)} style={{borderRadius:20}}>{m}</button>))}</div>
+<div style={{display:"flex",gap:8,marginBottom:10}}><input value={newPerson} onChange={e=>setNewPerson(e.target.value)} placeholder="Outra pessoa..." onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{flex:1,padding:"8px 12px",fontSize:13}}/><button className="btn bp bs" onClick={addPerson} style={{flexShrink:0}}>+ Adicionar</button></div>
+</div>
+{payers.map(p=>(<div key={p.name} className="fr" style={{marginBottom:6,alignItems:"center"}}><div className="fg"><label className="fl">{p.name} paga</label><input type="number" step="0.01" value={p.amount||""} onChange={e=>setSplitPayerAmount(p.name,e.target.value)} placeholder="0.00"/></div><button className="bi" onClick={()=>toggleSplitPayer(p.name)} title="Remover" style={{marginTop:16,flexShrink:0}}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button></div>))}
 {hasPayers&&<div style={{fontSize:13,marginTop:8,padding:"8px 12px",borderRadius:8,background:"var(--purple-bg)",color:"var(--purple)"}}>Total: {fmt(Number(form.splitTotal)||0)} = {myName}: {fmt(Number(form.splitMyShare)||0)}{payers.map(p=>` + ${p.name}: ${fmt(p.amount)}`).join("")}{mismatch&&<span style={{color:"var(--red)",fontWeight:600}}> ⚠ Valores não batem</span>}</div>}
-</div></div>);
+</div>);
 }
 
 // ─── BUDGET ───
