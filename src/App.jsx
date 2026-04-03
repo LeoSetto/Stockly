@@ -419,6 +419,23 @@ return(<div><div className="ph"><div className="pt">Cardápio Semanal</div><div 
 <div className="ma"><button className="btn bd bs" onClick={()=>{cl(editing.day,editing.meal);setEditing(null);}}>Limpar</button><button className="btn bg" onClick={()=>setEditing(null)}>Cancelar</button><button className="btn bp" onClick={sv}>Salvar</button></div>
 </Modal>}</div>);}
 
+// ─── SPLIT PANEL (extracted to avoid esbuild JSX parse issues) ───
+function SplitPanel({form,setForm,fmt,myName,allMembers,toggleSplitPayer,setSplitPayerAmount}){
+const payers=form.splitPayers||[];
+const othTotal=payers.reduce((a,p)=>a+p.amount,0);
+const diff=Math.abs((Number(form.splitMyShare)||0)+othTotal-(Number(form.splitTotal)||0));
+const mismatch=diff>0.01;
+const hasPayers=payers.length>0;
+return(<div style={{background:"var(--bg3)",borderRadius:10,padding:16}}>
+<div className="fr"><div className="fg"><label className="fl">Valor total da conta</label><input type="number" step="0.01" value={form.splitTotal||""} onChange={e=>{const st=Number(e.target.value)||0;const ot=payers.reduce((a,p)=>a+p.amount,0);setForm({...form,splitTotal:e.target.value,splitMyShare:Math.max(0,st-ot)});}}/></div>
+<div className="fg"><label className="fl">Minha parte ({myName})</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:16,fontWeight:700,color:"var(--accent)"}}>{fmt(Number(form.splitMyShare)||0)}</div></div></div>
+<div style={{marginTop:8}}><label className="fl" style={{marginBottom:8,display:"block"}}>Quem mais paga?</label>
+<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>{allMembers.filter(m=>m!==myName).map(m=>{const active=payers.find(p=>p.name===m);return(<button key={m} className={`btn ${active?"bp":"bg"} bs`} onClick={()=>toggleSplitPayer(m)} style={{borderRadius:20}}>{m}{active?" ✓":""}</button>);})}{allMembers.length<=1&&<div style={{fontSize:12,color:"var(--text3)"}}>Adicione membros em Configurações para dividir</div>}</div>
+{payers.map(p=>(<div key={p.name} className="fr" style={{marginBottom:6}}><div className="fg"><label className="fl">{p.name} paga</label><input type="number" step="0.01" value={p.amount||""} onChange={e=>setSplitPayerAmount(p.name,e.target.value)} placeholder="0.00"/></div></div>))}
+{hasPayers&&<div style={{fontSize:13,marginTop:8,padding:"8px 12px",borderRadius:8,background:"var(--purple-bg)",color:"var(--purple)"}}>Total: {fmt(Number(form.splitTotal)||0)} = {myName}: {fmt(Number(form.splitMyShare)||0)}{payers.map(p=>` + ${p.name}: ${fmt(p.amount)}`).join("")}{mismatch&&<span style={{color:"var(--red)",fontWeight:600}}> ⚠ Valores não batem</span>}</div>}
+</div></div>);
+}
+
 // ─── BUDGET ───
 function BudgetPage({data,setData,toast,user,mode,houseInfo}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
 const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[filter,setFilter]=useState("all");
@@ -560,14 +577,8 @@ return(<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>set
 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}} onClick={()=>{if(hasSplit){setForm({...form,splitTotal:0,splitMyShare:0,splitPayers:[]});}else{setForm({...form,splitTotal:Number(form.amount)||0,splitMyShare:Number(form.amount)||0});}}}>
 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${hasSplit?"var(--purple)":"var(--border2)"}`,background:hasSplit?"var(--purple)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{hasSplit&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
 <span style={{fontSize:14,fontWeight:600,color:hasSplit?"var(--purple)":"var(--text3)"}}>👥 Dividir conta (opcional)</span></div>
-{hasSplit&&<div style={{background:"var(--bg3)",borderRadius:10,padding:16}}>
-<div className="fr"><div className="fg"><label className="fl">Valor total da conta</label><input type="number" step="0.01" value={form.splitTotal||""} onChange={e=>{const st=Number(e.target.value)||0;const othersTotal=(form.splitPayers||[]).reduce((a,p)=>a+p.amount,0);setForm({...form,splitTotal:e.target.value,splitMyShare:Math.max(0,st-othersTotal)});}}/></div>
-<div className="fg"><label className="fl">Minha parte ({myName})</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:16,fontWeight:700,color:"var(--accent)"}}>{fmt(Number(form.splitMyShare)||0)}</div></div></div>
-<div style={{marginTop:8}}><label className="fl" style={{marginBottom:8,display:"block"}}>Quem mais paga?</label>
-<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>{allMembers.filter(m=>m!==myName).map(m=>{const active=(form.splitPayers||[]).find(p=>p.name===m);return(<button key={m} className={`btn ${active?"bp":"bg"} bs`} onClick={()=>toggleSplitPayer(m)} style={{borderRadius:20}}>{m}{active&&" ✓"}</button>);})}{allMembers.length<=1&&<div style={{fontSize:12,color:"var(--text3)"}}>Adicione membros em Configurações → Geral para dividir</div>}</div>
-{(form.splitPayers||[]).map(p=>(<div key={p.name} className="fr" style={{marginBottom:6}}><div className="fg"><label className="fl">{p.name} paga</label><input type="number" step="0.01" value={p.amount||""} onChange={e=>setSplitPayerAmount(p.name,e.target.value)} placeholder="0.00"/></div></div>))}
-{(()=>{if((form.splitPayers||[]).length===0)return null;const othT=(form.splitPayers||[]).reduce((a,p)=>a+p.amount,0);const splitDiff=Math.abs((Number(form.splitMyShare)||0)+othT-(Number(form.splitTotal)||0));const mismatch=splitDiff>0.01;return(<div style={{fontSize:13,marginTop:8,padding:"8px 12px",borderRadius:8,background:"var(--purple-bg)",color:"var(--purple)"}}>Total: {fmt(Number(form.splitTotal)||0)} = {myName}: {fmt(Number(form.splitMyShare)||0)}{(form.splitPayers||[]).map(p=>` + ${p.name}: ${fmt(p.amount)}`).join("")}{mismatch&&<span style={{color:"var(--red)",fontWeight:600}}> ⚠ Valores não batem</span>}</div>);})()}
-</div>}</div>
+{hasSplit&&<SplitPanel form={form} setForm={setForm} fmt={fmt} myName={myName} allMembers={allMembers} toggleSplitPayer={toggleSplitPayer} setSplitPayerAmount={setSplitPayerAmount}/>}
+</div>
 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,cursor:"pointer"}} onClick={()=>setForm({...form,paid:!form.paid})}>
 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${form.paid?"var(--green)":"var(--yellow)"}`,background:form.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{form.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
 <span style={{fontSize:14,color:form.paid?"var(--green)":"var(--yellow)",fontWeight:500}}>{form.paid?"Já pago":"Ainda não pago"}</span></div>
