@@ -206,7 +206,8 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 .sd{font-size:11px}
 
 /* Dashboard grid */
-.dg{grid-template-columns:1fr;gap:12px}
+.dg{grid-template-columns:1fr;gap:0}
+.dg .card{margin-bottom:8px;border-radius:14px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.1)}
 
 /* Cards */
 .card{padding:14px;margin-bottom:10px;border-radius:12px}
