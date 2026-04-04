@@ -239,7 +239,7 @@ body,html,#root{overflow-x:hidden;max-width:100vw}
 .bi{padding:6px}
 
 /* Filter buttons - horizontal scroll */
-.filter-scroll{display:flex;overflow-x:auto;gap:6px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:-2px}
+.filter-scroll{display:flex;overflow-x:auto;gap:6px;padding:4px 2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .filter-scroll::-webkit-scrollbar{display:none}
 .filter-scroll .btn{flex-shrink:0}
 
