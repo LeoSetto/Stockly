@@ -238,6 +238,46 @@ function Modal({title,onClose,children}){return(<div className="mo" onClick={onC
 function Toast({message,onUndo}){if(!message)return null;return<div className="toast">{I.check} {message}{onUndo&&<button onClick={onUndo} style={{marginLeft:8,padding:"4px 12px",borderRadius:6,fontSize:12,fontWeight:700,border:"1px solid var(--accent)",background:"transparent",color:"var(--accent)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",transition:"all .2s"}}>Desfazer</button>}</div>;}
 function TagEditor({items,onAdd,onRemove,placeholder="Novo item..."}){const[v,setV]=useState("");const add=()=>{const t=v.trim();if(t&&!items.includes(t)){onAdd(t);setV("");}};return(<div><div className="te">{items.map(t=><div className="tc" key={t}>{t}<button onClick={()=>onRemove(t)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={12}/></button></div>)}</div><div className="ta"><input value={v} onChange={e=>setV(e.target.value)} placeholder={placeholder} onKeyDown={e=>e.key==="Enter"&&add()}/><button className="btn bp bs" onClick={add}>{I.plus}</button></div></div>);}
 
+// ─── Confirm Delete (hold to delete) ───
+function ConfirmDelete({onConfirm,children,label}){
+const[confirming,setConfirming]=useState(false);
+const[progress,setProgress]=useState(0);
+const timerRef=useRef(null);const intervalRef=useRef(null);
+const startHold=()=>{setConfirming(true);setProgress(0);const start=Date.now();intervalRef.current=setInterval(()=>{const elapsed=Date.now()-start;const pct=Math.min((elapsed/800)*100,100);setProgress(pct);if(elapsed>=800){clearInterval(intervalRef.current);onConfirm();setConfirming(false);setProgress(0);}},30);};
+const cancelHold=()=>{clearInterval(intervalRef.current);setConfirming(false);setProgress(0);};
+const handleClick=()=>{if(!confirming){setConfirming(true);timerRef.current=setTimeout(()=>setConfirming(false),3000);}else{onConfirm();setConfirming(false);}};
+useEffect(()=>()=>{clearInterval(intervalRef.current);clearTimeout(timerRef.current);},[]);
+if(children)return(<div onMouseDown={startHold} onMouseUp={cancelHold} onMouseLeave={cancelHold} onTouchStart={startHold} onTouchEnd={cancelHold} style={{position:"relative",overflow:"hidden"}}>{children}{confirming&&<div style={{position:"absolute",bottom:0,left:0,height:3,background:"var(--red)",width:`${progress}%`,borderRadius:2,transition:"width 30ms linear"}}/>}</div>);
+return confirming?<button className="btn bd bs" onClick={()=>{onConfirm();setConfirming(false);}} style={{animation:"su .15s ease"}}>{label||"Confirmar?"}</button>:<button className="bi" onClick={handleClick} title="Remover">{I.trash}</button>;
+}
+
+// ─── FAB (Floating Action Button) ───
+function FAB({goTo,setData,toast,data}){
+const[open,setOpen]=useState(false);
+const c=data.config;
+const actions=[
+{label:"Despensa",icon:I.pantry,color:"var(--blue)",action:()=>goTo("pantry")},
+{label:"Compras",icon:I.grocery,color:"var(--green)",action:()=>goTo("grocery")},
+{label:"Gasto",icon:I.budget,color:"var(--red)",action:()=>goTo("budget")},
+{label:"Tarefa",icon:I.chores,color:"var(--yellow)",action:()=>goTo("chores")},
+];
+return(<div className="m-only" style={{position:"fixed",bottom:24,right:20,zIndex:150,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
+{open&&<div style={{display:"flex",flexDirection:"column",gap:8,animation:"su .2s ease"}}>
+{actions.map((a,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,animation:`su ${.1+i*.06}s ease`}}>
+<span style={{fontSize:12,fontWeight:600,color:"var(--text)",background:"var(--bg2)",padding:"6px 12px",borderRadius:8,boxShadow:"var(--shadow)",whiteSpace:"nowrap"}}>{a.label}</span>
+<button onClick={()=>{a.action();setOpen(false);}} style={{width:44,height:44,borderRadius:22,border:"none",background:a.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 4px 16px rgba(0,0,0,.3)`,transition:"all .2s"}}>{a.icon}</button>
+</div>))}
+</div>}
+{open&&<div style={{position:"fixed",inset:0,zIndex:-1}} onClick={()=>setOpen(false)}/>}
+<button onClick={()=>setOpen(!open)} style={{width:56,height:56,borderRadius:28,border:"none",background:`linear-gradient(135deg,var(--accent),var(--accent2))`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 6px 24px rgba(0,0,0,.4)`,transition:"all .3s cubic-bezier(.4,0,.2,1)",transform:open?"rotate(45deg)":"rotate(0)"}}>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button></div>);
+}
+
+// ─── Time ago helper ───
+const timeAgo=(ts)=>{if(!ts)return"";const diff=Date.now()-ts;const mins=Math.floor(diff/60000);if(mins<1)return"agora";if(mins<60)return`${mins}min`;const hrs=Math.floor(mins/60);if(hrs<24)return`${hrs}h`;const days=Math.floor(hrs/24);return`${days}d`;};
+const editStamp=(user)=>({editBy:user?.displayName||user?.email?.split("@")[0]||"",editAt:Date.now()});
+
 // ─── DASHBOARD ───
 function Dashboard({data,goTo,user,mode}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const w=c.expiryWarnDays||7;
 const es=data.pantry.filter(i=>{const d=daysUntil(i.expiry);return d<=w&&d>=0;});
@@ -279,14 +319,14 @@ return(<div>
 </div></div>);}
 
 // ─── PANTRY ───
-function PantryPage({data,setData,toast}){const c=data.config;const[search,setSearch]=useState("");const[fL,setFL]=useState("Todos");const[fC,setFC]=useState("Todos");const[modal,setModal]=useState(null);const[form,setForm]=useState({});
+function PantryPage({data,setData,toast,user,mode}){const c=data.config;const[search,setSearch]=useState("");const[fL,setFL]=useState("Todos");const[fC,setFC]=useState("Todos");const[modal,setModal]=useState(null);const[form,setForm]=useState({});
 const filtered=data.pantry.filter(i=>{if(search&&!i.name.toLowerCase().includes(search.toLowerCase()))return false;if(fL!=="Todos"&&i.location!==fL)return false;if(fC!=="Todos"&&i.category!==fC)return false;return true;}).sort((a,b)=>daysUntil(a.expiry)-daysUntil(b.expiry));
 const openAdd=()=>{setForm({name:"",qty:"",unit:c.units[0]||"un",location:c.locations[0]||"",expiry:"",category:c.pantryCategories.slice(-1)[0]||""});setModal("add");};
 const openEdit=(item)=>{setForm({...item});setModal("edit");};
-const saveItem=()=>{if(!form.name)return;if(modal==="add"){setData(d=>({...d,pantry:[...d.pantry,{...form,id:Date.now(),qty:Number(form.qty)||1}]}));toast("Item adicionado");}else{setData(d=>({...d,pantry:d.pantry.map(i=>i.id===form.id?{...form,qty:Number(form.qty)}:i)}));toast("Item atualizado");}setModal(null);};
+const saveItem=()=>{if(!form.name)return;const stamp=editStamp(user);if(modal==="add"){setData(d=>({...d,pantry:[...d.pantry,{...form,id:Date.now(),qty:Number(form.qty)||1,...stamp}]}));toast("Item adicionado");}else{setData(d=>({...d,pantry:d.pantry.map(i=>i.id===form.id?{...form,qty:Number(form.qty),...stamp}:i)}));toast("Item atualizado");}setModal(null);};
 const del=(id)=>{setData(d=>({...d,pantry:d.pantry.filter(i=>i.id!==id)}));toast("Item removido");};
 const toGrocery=(item)=>{setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:item.name,qty:1,unit:item.unit,checked:false,category:item.category}]}));toast(`"${item.name}" → lista`);};
-const w=c.expiryWarnDays||7;
+const w=c.expiryWarnDays||7;const shared=mode==="shared";
 return(<div><div className="ph"><div className="pt">Despensa</div><div className="ps">Controle completo do que tem em casa</div></div>
 <div className="tb"><div className="sb-i" style={{marginBottom:0,flex:1,maxWidth:320}}>{I.search}<input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
 <select value={fL} onChange={e=>setFL(e.target.value)} style={{width:140}}><option>Todos</option>{c.locations.map(l=><option key={l}>{l}</option>)}</select>
@@ -294,7 +334,7 @@ return(<div><div className="ph"><div className="pt">Despensa</div><div className
 <div className="tr"><button className="btn bp" onClick={openAdd}>{I.plus} Adicionar</button></div></div>
 <div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th>Item</th><th>Qtd</th><th>Local</th><th>Categoria</th><th>Validade</th><th>Status</th><th></th></tr></thead><tbody>
 {filtered.map(item=>{const d=daysUntil(item.expiry);const st=!item.expiry?"tg-n":d<0?"tg-r":d<=3?"tg-y":d<=w?"tg-b":"tg-g";const sx=!item.expiry?"—":d<0?"Vencido":d===0?"Hoje!":d<=w?`${d}d`:"OK";
-return(<tr key={item.id}><td className="in">{item.name}</td><td>{item.qty} {item.unit}</td><td><span className="tg tg-n">{item.location}</span></td><td style={{color:"var(--text3)"}}>{item.category}</td><td>{item.expiry?new Date(item.expiry+"T12:00").toLocaleDateString(c.locale||"pt-BR"):"—"}</td><td><span className={`tg ${st}`}>{sx}</span></td><td><div style={{display:"flex",gap:4}}><button className="bi" title="Editar" onClick={()=>openEdit(item)}>{I.edit}</button><button className="bi" title="→ Lista" onClick={()=>toGrocery(item)}>{I.grocery}</button><button className="bi" title="Remover" onClick={()=>del(item.id)}>{I.trash}</button></div></td></tr>);})}
+return(<tr key={item.id}><td className="in">{item.name}{shared&&item.editBy&&<div style={{fontSize:10,color:"var(--text3)",marginTop:2}}>{item.editBy} · {timeAgo(item.editAt)}</div>}</td><td>{item.qty} {item.unit}</td><td><span className="tg tg-n">{item.location}</span></td><td style={{color:"var(--text3)"}}>{item.category}</td><td>{item.expiry?new Date(item.expiry+"T12:00").toLocaleDateString(c.locale||"pt-BR"):"—"}</td><td><span className={`tg ${st}`}>{sx}</span></td><td><div style={{display:"flex",gap:4}}><button className="bi" title="Editar" onClick={()=>openEdit(item)}>{I.edit}</button><button className="bi" title="→ Lista" onClick={()=>toGrocery(item)}>{I.grocery}</button><ConfirmDelete onConfirm={()=>del(item.id)}/></div></td></tr>);})}
 {filtered.length===0&&<tr><td colSpan={7} style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhum item</td></tr>}
 </tbody></table></div>
 {/* Mobile cards */}
@@ -303,7 +343,8 @@ return(<tr key={item.id}><td className="in">{item.name}</td><td>{item.qty} {item
 return(<div className="m-card" key={item.id} style={{borderLeft:`3px solid ${d<0?"var(--red)":d<=w?"var(--yellow)":"var(--border)"}`}}>
 <div className="m-card-h"><span className="m-card-n">{item.name}</span><span className={`tg ${st}`}>{sx}</span></div>
 <div className="m-card-r"><span>{item.qty} {item.unit}</span><span>·</span><span className="tg tg-n">{item.location}</span><span>·</span><span style={{color:"var(--text3)"}}>{item.category}</span>{item.expiry&&<><span>·</span><span style={{color:"var(--text3)"}}>{new Date(item.expiry+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</span></>}</div>
-<div className="m-card-a"><button className="bi" onClick={()=>openEdit(item)}>{I.edit}</button><button className="bi" onClick={()=>toGrocery(item)}>{I.grocery}</button><button className="bi" onClick={()=>del(item.id)}>{I.trash}</button></div>
+{shared&&item.editBy&&<div style={{fontSize:10,color:"var(--text3)",marginTop:4}}>{item.editBy} · {timeAgo(item.editAt)}</div>}
+<div className="m-card-a"><button className="bi" onClick={()=>openEdit(item)}>{I.edit}</button><button className="bi" onClick={()=>toGrocery(item)}>{I.grocery}</button><ConfirmDelete onConfirm={()=>del(item.id)}/></div>
 </div>);})}
 {filtered.length===0&&<div style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhum item</div>}
 </div></div>
@@ -323,7 +364,7 @@ return(<div className="m-card" key={item.id} style={{borderLeft:`3px solid ${d<0
 const COUNTABLE_UNITS=["un","pacote","lata","caixa","dúzia","fatia","sachê"];
 const isCountable=(u)=>COUNTABLE_UNITS.includes(u);
 
-function GroceryPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");const[finishModal,setFinishModal]=useState(false);const[finishCard,setFinishCard]=useState(c.cards?.[0]||"");const[finishPaid,setFinishPaid]=useState(false);
+function GroceryPage({data,setData,toast,user,mode}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");const[finishModal,setFinishModal]=useState(false);const[finishCard,setFinishCard]=useState(c.cards?.[0]||"");const[finishPaid,setFinishPaid]=useState(false);
 const[lots,setLots]=useState([]);const[lotsMode,setLotsMode]=useState(false);
 const vwCats=c.variableWeightCategories||[];
 const isVW=(cat)=>vwCats.includes(cat);
@@ -355,20 +396,23 @@ const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"num
 const expense={id:Date.now()+1,desc,amount:total,category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id,type:"variavel"};
 setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[expense,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
 toast(`Compra finalizada! ${fmt(total)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
-const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
+const pend=data.grocery.filter(i=>!i.checked).sort((a,b)=>(a.category||"").localeCompare(b.category||""));const done=data.grocery.filter(i=>i.checked);
 const doneTotal=done.reduce((a,i)=>a+(i.price||0),0);
 const lastUnitPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.unitPrice||h[0]?.totalPrice||null;};
+// Group pending by category
+const pendByCat={};pend.forEach(i=>{const cat=i.category||"Outros";if(!pendByCat[cat])pendByCat[cat]=[];pendByCat[cat].push(i);});
+const catOrder=Object.keys(pendByCat).sort();
 return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados{doneTotal>0&&` · Total: ${fmt(doneTotal)}`}</div></div>
 <div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setModal(true);}}>{I.plus} Adicionar</button>
 {done.length>0&&<button className="btn bg" onClick={openFinish}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
-{pend.map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}<span className="tg tg-n">{i.category}</span><button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button></div>);})}
-{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
+{catOrder.map(cat=>(<div key={cat}>{catOrder.length>1&&<div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1.5,background:"var(--bg3)",borderBottom:"1px solid var(--border)"}}>{cat} ({pendByCat[cat].length})</div>}
+{pendByCat[cat].map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}{catOrder.length<=1&&<span className="tg tg-n">{i.category}</span>}<ConfirmDelete onConfirm={()=>rem(i.id)}/></div>);})}</div>))}{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
 {done.map(i=>{const cnt=isCountable(i.unit);const hasLots=i.lots&&i.lots.length>1;return(<div className="cr" key={i.id} style={{opacity:.7,flexWrap:"wrap"}}>
 <div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>
 <span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>
 {i.price>0?<span style={{fontSize:12,color:"var(--green)",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setEditingPrice(i);setEditUP(i.unitPrice||"");}}>{hasLots?`${i.lots.length} lotes = `:cnt&&i.qty>1?`${fmt(i.unitPrice||0)} × ${i.qty} = `:""}{fmt(i.price)} {I.edit}</span>:<span style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}} onClick={()=>{setEditingPrice(i);setEditUP("");}}>+ preço</span>}
-<button className="bi" onClick={()=>rem(i.id)}>{I.trash}</button>
+<ConfirmDelete onConfirm={()=>rem(i.id)}/>
 {hasLots&&<div style={{width:"100%",paddingLeft:34,display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>{i.lots.map((l,idx)=>(<span key={idx} style={{fontSize:10,background:"var(--bg4)",padding:"2px 8px",borderRadius:8,color:"var(--text3)"}}>{l.weight>0?`${l.weight}${i.unit} `:""}{fmt(l.price)}</span>))}</div>}
 </div>);})}
 </div>
@@ -432,24 +476,26 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 </div>);}
 
 // ─── CHORES ───
-function ChoresPage({data,setData,toast}){const c=data.config;const[modal,setModal]=useState(null);const[form,setForm]=useState({});
+function ChoresPage({data,setData,toast,user,mode}){const c=data.config;const[modal,setModal]=useState(null);const[form,setForm]=useState({});
 const gs=(ch)=>{const d=Math.abs(daysUntil(ch.lastDone));const l={"Diário":1,"2x Semana":3,"Semanal":7,"Quinzenal":14,"Mensal":30};const lv=l[ch.freq]||7;if(d>=lv*1.5)return"overdue";if(d>=lv)return"due";return"ok";};
-const md=(id)=>{setData(d=>({...d,chores:d.chores.map(ch=>ch.id===id?{...ch,lastDone:today()}:ch)}));toast("Concluída!");};
-const sv=()=>{if(!form.name)return;if(modal==="add"){setData(d=>({...d,chores:[...d.chores,{...form,id:Date.now(),effort:Number(form.effort)||1,lastDone:today()}]}));toast("Criada");}else{setData(d=>({...d,chores:d.chores.map(ch=>ch.id===form.id?{...form,effort:Number(form.effort)}:ch)}));toast("Atualizada");}setModal(null);};
+const md=(id)=>{setData(d=>({...d,chores:d.chores.map(ch=>ch.id===id?{...ch,lastDone:today(),...editStamp(user)}:ch)}));toast("Concluída!");};
+const sv=()=>{if(!form.name)return;const stamp=editStamp(user);if(modal==="add"){setData(d=>({...d,chores:[...d.chores,{...form,id:Date.now(),effort:Number(form.effort)||1,lastDone:today(),...stamp}]}));toast("Criada");}else{setData(d=>({...d,chores:d.chores.map(ch=>ch.id===form.id?{...form,effort:Number(form.effort),...stamp}:ch)}));toast("Atualizada");}setModal(null);};
 const dl=(id)=>{setData(d=>({...d,chores:d.chores.filter(ch=>ch.id!==id)}));toast("Removida");};
+const shared=mode==="shared";
 const sorted=[...data.chores].sort((a,b)=>{const p={overdue:0,due:1,ok:2};return(p[gs(a)]||0)-(p[gs(b)]||0);});
 return(<div><div className="ph"><div className="pt">Tarefas da Casa</div><div className="ps">Organize, distribua e acompanhe</div></div>
 {data.members.length>1&&<div className="sg" style={{marginBottom:20}}>{data.members.map(m=><div className="sc bl" key={m}><div className="sl">{m}</div><div className="sv">{data.chores.filter(ch=>ch.assignee===m).length}</div><div className="sd">tarefas</div></div>)}</div>}
 <div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",room:c.rooms[0]||"",assignee:data.members[0]||"Todos",freq:c.choreFreqs[2]||"Semanal",effort:1});setModal("add");}}>{I.plus} Nova Tarefa</button></div>
 <div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th>Tarefa</th><th>Cômodo</th><th>Responsável</th><th>Freq</th><th>Esforço</th><th>Última vez</th><th>Status</th><th></th></tr></thead><tbody>
-{sorted.map(ch=>{const s=gs(ch);return(<tr key={ch.id}><td className="in">{ch.name}</td><td><span className="tg tg-n">{ch.room}</span></td><td>{ch.assignee}</td><td style={{color:"var(--text3)"}}>{ch.freq}</td><td><div className="ef">{[1,2,3].map(n=><div key={n} className={`eo ${n<=ch.effort?"ea":""}`}/>)}</div></td><td style={{fontSize:13}}>{ch.lastDone?new Date(ch.lastDone+"T12:00").toLocaleDateString(c.locale||"pt-BR"):"—"}</td><td><span className={`tg ${s==="overdue"?"tg-r":s==="due"?"tg-y":"tg-g"}`}>{s==="overdue"?"Atrasada":s==="due"?"Pendente":"Em dia"}</span></td><td><div style={{display:"flex",gap:4}}><button className="btn bg bs" onClick={()=>md(ch.id)}>{I.check} Feito</button><button className="bi" onClick={()=>{setForm({...ch});setModal("edit");}}>{I.edit}</button><button className="bi" onClick={()=>dl(ch.id)}>{I.trash}</button></div></td></tr>);})}
+{sorted.map(ch=>{const s=gs(ch);return(<tr key={ch.id}><td className="in">{ch.name}{shared&&ch.editBy&&<div style={{fontSize:10,color:"var(--text3)",marginTop:2}}>{ch.editBy} · {timeAgo(ch.editAt)}</div>}</td><td><span className="tg tg-n">{ch.room}</span></td><td>{ch.assignee}</td><td style={{color:"var(--text3)"}}>{ch.freq}</td><td><div className="ef">{[1,2,3].map(n=><div key={n} className={`eo ${n<=ch.effort?"ea":""}`}/>)}</div></td><td style={{fontSize:13}}>{ch.lastDone?new Date(ch.lastDone+"T12:00").toLocaleDateString(c.locale||"pt-BR"):"—"}</td><td><span className={`tg ${s==="overdue"?"tg-r":s==="due"?"tg-y":"tg-g"}`}>{s==="overdue"?"Atrasada":s==="due"?"Pendente":"Em dia"}</span></td><td><div style={{display:"flex",gap:4}}><button className="btn bg bs" onClick={()=>md(ch.id)}>{I.check} Feito</button><button className="bi" onClick={()=>{setForm({...ch});setModal("edit");}}>{I.edit}</button><ConfirmDelete onConfirm={()=>dl(ch.id)}/></div></td></tr>);})}
 </tbody></table></div>
 {/* Mobile cards */}
 <div className="m-cards m-only" style={{padding:8}}>
 {sorted.map(ch=>{const s=gs(ch);return(<div className="m-card" key={ch.id} style={{borderLeft:`3px solid ${s==="overdue"?"var(--red)":s==="due"?"var(--yellow)":"var(--green)"}`}}>
 <div className="m-card-h"><span className="m-card-n">{ch.name}</span><span className={`tg ${s==="overdue"?"tg-r":s==="due"?"tg-y":"tg-g"}`}>{s==="overdue"?"Atrasada":s==="due"?"Pendente":"Em dia"}</span></div>
 <div className="m-card-r"><span className="tg tg-n">{ch.room}</span><span>{ch.assignee}</span><span>·</span><span style={{color:"var(--text3)"}}>{ch.freq}</span><span>·</span><div className="ef">{[1,2,3].map(n=><div key={n} className={`eo ${n<=ch.effort?"ea":""}`}/>)}</div></div>
-<div className="m-card-a"><button className="btn bg bs" onClick={()=>md(ch.id)}>{I.check} Feito</button><button className="bi" onClick={()=>{setForm({...ch});setModal("edit");}}>{I.edit}</button><button className="bi" onClick={()=>dl(ch.id)}>{I.trash}</button></div>
+{shared&&ch.editBy&&<div style={{fontSize:10,color:"var(--text3)",marginTop:4}}>{ch.editBy} · {timeAgo(ch.editAt)}</div>}
+<div className="m-card-a"><button className="btn bg bs" onClick={()=>md(ch.id)}>{I.check} Feito</button><button className="bi" onClick={()=>{setForm({...ch});setModal("edit");}}>{I.edit}</button><ConfirmDelete onConfirm={()=>dl(ch.id)}/></div>
 </div>);})}
 </div></div>
 {modal&&<Modal title={modal==="add"?"Nova Tarefa":"Editar Tarefa"} onClose={()=>setModal(null)}>
@@ -642,12 +688,12 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 {Object.keys(incByCat).length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>{Object.entries(incByCat).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>(<div key={cat} style={{background:"var(--green-bg)",borderRadius:8,padding:"8px 14px",flex:"0 1 auto"}}><div style={{fontSize:11,color:"var(--green)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>{cat}</div><div style={{fontSize:16,fontWeight:700,color:"var(--green)"}}>{fmt(val)}</div></div>))}</div>}
 {mIncomes.length===0?<div style={{color:"var(--text3)",fontSize:13,padding:"12px 0"}}>Nenhuma receita em {fmtMonth(selMonth)}</div>:
 <><div style={{overflowX:"auto"}}><table><thead><tr><th>Descrição</th><th>Valor</th><th>Categoria</th><th>Data</th><th>Recorrente</th><th></th></tr></thead><tbody>
-{mIncomes.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>(<tr key={i.id}><td className="in">{i.desc}</td><td style={{fontWeight:600,color:"var(--green)"}}>{fmt(i.amount)}</td><td><span className="tg tg-g">{i.category}</span></td><td style={{color:"var(--text3)"}}>{new Date(i.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td><td>{i.recurring?<span className="tg tg-b">Sim</span>:<span style={{color:"var(--text3)"}}>—</span>}</td><td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>{setIncForm({...i});setIncModal("edit");}} title="Editar">{I.edit}</button><button className="bi" onClick={()=>delInc(i.id)} title="Remover">{I.trash}</button></div></td></tr>))}
+{mIncomes.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>(<tr key={i.id}><td className="in">{i.desc}</td><td style={{fontWeight:600,color:"var(--green)"}}>{fmt(i.amount)}</td><td><span className="tg tg-g">{i.category}</span></td><td style={{color:"var(--text3)"}}>{new Date(i.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td><td>{i.recurring?<span className="tg tg-b">Sim</span>:<span style={{color:"var(--text3)"}}>—</span>}</td><td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>{setIncForm({...i});setIncModal("edit");}} title="Editar">{I.edit}</button><ConfirmDelete onConfirm={()=>delInc(i.id)}/></div></td></tr>))}
 </tbody></table></div>
 <div className="m-cards m-only">{mIncomes.sort((a,b)=>b.date.localeCompare(a.date)).map(i=>(<div className="m-card" key={i.id} style={{borderLeft:"3px solid var(--green)"}}>
 <div className="m-card-h"><span className="m-card-n">{i.desc}</span><span style={{fontWeight:700,color:"var(--green)",flexShrink:0}}>{fmt(i.amount)}</span></div>
 <div className="m-card-r"><span className="tg tg-g">{i.category}</span>{i.recurring&&<span className="tg tg-b">Recorrente</span>}<span style={{color:"var(--text3)",fontSize:11}}>{new Date(i.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span></div>
-<div className="m-card-a"><button className="bi" onClick={()=>{setIncForm({...i});setIncModal("edit");}}>{I.edit}</button><button className="bi" onClick={()=>delInc(i.id)}>{I.trash}</button></div>
+<div className="m-card-a"><button className="bi" onClick={()=>{setIncForm({...i});setIncModal("edit");}}>{I.edit}</button><ConfirmDelete onConfirm={()=>delInc(i.id)}/></div>
 </div>))}</div></>}</div>
 {/* Budget by category */}
 <div className="card"><div className="ct" style={{justifyContent:"space-between"}}><span style={{display:"flex",alignItems:"center",gap:8}}>📊 Orçamento por Categoria</span><button className="btn bg bs" onClick={openBudgetCat}>{I.edit} Editar Orçamentos</button></div>
@@ -667,7 +713,7 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 <td>{e.card?<span className="tg tg-p">{e.card}</span>:<span style={{color:"var(--text3)",fontSize:12}}>—</span>}</td>
 <td><span className="tg tg-n">{e.category}</span></td>
 <td style={{color:"var(--text3)",fontSize:13}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td>
-<td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>openEdit(e)} title="Editar">{I.edit}</button><button className="bi" onClick={()=>de(e.id)} title="Remover">{I.trash}</button></div></td>
+<td><div style={{display:"flex",gap:4}}><button className="bi" onClick={()=>openEdit(e)} title="Editar">{I.edit}</button><ConfirmDelete onConfirm={()=>de(e.id)}/></div></td>
 </tr>);})}
 {filtered.length===0&&<tr><td colSpan={8} style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhum gasto{filter!=="all"?` (${filter})`:""} neste mês</td></tr>}
 </tbody></table></div>
@@ -680,7 +726,7 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 <span style={{fontWeight:700,fontSize:15,color:e.paid?"var(--green)":"var(--yellow)",flexShrink:0}}>{fmt(myAmt)}</span></div>
 <div className="m-card-r" style={{flexWrap:"wrap"}}>{tags.map((t,i)=><span key={i} className={`tg ${t.cls}`}>{t.label}</span>)}<span className={`tg ${e.type==="fixo"?"tg-b":"tg-n"}`}>{e.type==="fixo"?"Fixo":"Var."}</span>{e.card&&<span className="tg tg-p">{e.card}</span>}<span className="tg tg-n">{e.category}</span><span style={{color:"var(--text3)",fontSize:11}}>{new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span></div>
 {e.splitTotal>0&&<div style={{fontSize:11,color:"var(--text3)",marginTop:4}}>Total: {fmt(e.splitTotal)} · Eu: {fmt(e.splitMyShare||e.amount)}</div>}
-<div className="m-card-a"><button className="bi" onClick={()=>openEdit(e)}>{I.edit}</button><button className="bi" onClick={()=>de(e.id)}>{I.trash}</button></div>
+<div className="m-card-a"><button className="bi" onClick={()=>openEdit(e)}>{I.edit}</button><ConfirmDelete onConfirm={()=>de(e.id)}/></div>
 </div>);})}
 {filtered.length===0&&<div style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhum gasto neste mês</div>}
 </div></div>
@@ -1123,12 +1169,12 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {so&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}} onClick={()=>setSo(false)}/>}
 <main className="mc">
 {page==="dashboard"&&<Dashboard data={data} goTo={go} user={user} mode={mode}/>}
-{page==="pantry"&&<PantryPage data={data} setData={setData} toast={toast}/>}
-{page==="grocery"&&<GroceryPage data={data} setData={setData} toast={toast}/>}
-{page==="chores"&&<ChoresPage data={data} setData={setData} toast={toast}/>}
+{page==="pantry"&&<PantryPage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
+{page==="grocery"&&<GroceryPage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
+{page==="chores"&&<ChoresPage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
 {page==="meals"&&<MealsPage data={data} setData={setData} toast={toast}/>}
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast} user={user} mode={mode} houseInfo={houseInfo}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="help"&&<HelpPage goTo={go}/>}
 {page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs} mode={mode} toggleMode={toggleMode}/>}
-</main></div>{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm} onUndo={undoRef.current?doUndo:null}/></>);}
+</main></div>{page==="dashboard"&&<FAB goTo={go} setData={setData} toast={toast} data={data}/>}{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm} onUndo={undoRef.current?doUndo:null}/></>);}
