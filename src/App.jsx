@@ -1248,6 +1248,7 @@ const TOUR_STEPS=[
 {icon:"✅",title:"Tarefas",text:"Organize a limpeza e manutenção da casa. Crie tarefas, defina quem é responsável, a frequência (diário, semanal...) e marque quando foi feita. O app mostra o que está atrasado."},
 {icon:"🍽️",title:"Cardápio",text:"Planeje as refeições da semana. Clique no dia e na refeição para definir o que vai cozinhar. Você pode personalizar os dias e tipos de refeição (café, almoço, lanche, jantar...)."},
 {icon:"💰",title:"Finanças",text:"Painel financeiro completo! Registre receitas (salário, VR, extras) e gastos (fixos e variáveis). Veja o saldo mensal, orçamento por categoria, totais por cartão e navegue mês a mês. Compras do mercado aparecem aqui automaticamente."},
+{icon:"🔁",title:"Rotina",text:"Seu centro de organização pessoal! Crie hábitos com streak (🔥), tarefas com prioridade e subtarefas, e eventos na agenda. A aba 'Hoje' mostra tudo de uma vez com anel de progresso. Funciona no modo pessoal e compartilhado."},
 {icon:"📈",title:"Preços",text:"Acompanhe a evolução dos preços dos produtos ao longo do tempo. O app registra automaticamente quando você compra algo e mostra gráficos de variação — sabe aquele arroz que subiu? Aqui você vê!"},
 {icon:"⚙️",title:"Tudo é customizável!",text:"Vá em Configurações para personalizar: nome da casa, tema, cores, categorias, cômodos, cartões de pagamento, tipos de refeição... Tudo pode ser mudado do seu jeito."},
 {icon:"👨‍👩‍👧‍👦",title:"Compartilhe com a família",text:"Em Configurações → Casa, você encontra o código da sua casa. Mande para sua família — cada pessoa faz login com a própria conta e digita o código. Todos compartilham os mesmos dados!"},
@@ -1326,6 +1327,19 @@ const sections=[
 "Totais por Cartão: veja quanto saiu de cada forma de pagamento (Pix, crédito, débito...) no mês.",
 "Compras finalizadas na Lista de Compras aparecem aqui automaticamente como gasto variável!",
 ]},
+{id:"rotina",icon:"🔁",title:"Rotina",color:"#22D3EE",content:[
+"A aba Rotina é o seu centro de organização pessoal. Ela combina três ferramentas em uma: Hábitos, Tarefas e Agenda.",
+"A aba 'Hoje' mostra um resumo visual do seu dia: anel de progresso com % de hábitos feitos, eventos agendados e tarefas pendentes. Tudo de uma vez.",
+"Hábitos: crie hábitos como 'Beber 2L de água', 'Ler 30min', 'Exercício'. Cada hábito tem ícone/emoji, categoria (Saúde, Produtividade...), período do dia (Manhã, Tarde, Noite) e frequência (diário, dias específicos, semanal).",
+"Tipos de hábito: Sim/Não (só marcar), Quantidade (ex: 8 copos de água) ou Tempo (ex: 30 minutos). Para quantidade e tempo, defina uma meta diária.",
+"Streak: cada hábito mostra quantos dias seguidos você completou (🔥). A aba Hábitos mostra um heatmap semanal com todos os seus hábitos e seus streaks.",
+"Tarefas: crie to-dos com nome, descrição, data de vencimento, prioridade (Alta, Média, Baixa) e lista (Pessoal, Trabalho, Casa). Adicione subtarefas para quebrar em passos menores.",
+"No modo compartilhado, você pode atribuir tarefas a outros membros da casa. Todos veem quem é responsável pelo quê.",
+"As tarefas são organizadas em: 'Hoje e Atrasadas', 'Próximas' e 'Concluídas'. Marque como feita tocando no checkbox.",
+"Agenda: adicione eventos com título, data, horário de início/fim, cor e notas. Marque como 'Dia inteiro' para eventos sem horário específico.",
+"A aba Agenda mostra a semana inteira com os eventos de cada dia. Toque em qualquer evento para editar ou remover.",
+"Todas as categorias de hábitos e listas de tarefas são customizáveis em Configurações → Listas.",
+]},
 {id:"precos",icon:"📈",title:"Preços",color:"#34D399",content:[
 "Aqui você vê a evolução dos preços de cada produto ao longo do tempo.",
 "Sempre que você registra um preço na Lista de Compras, ele aparece aqui automaticamente. Também pode registrar preços manualmente.",
@@ -1354,7 +1368,8 @@ return(<div><div className="ph"><div className="pt">Ajuda</div><div className="p
 <strong style={{color:"var(--text)"}}>4.</strong> Clique em "Finalizar Compra" — tudo vai pra Despensa e Finanças<br/>
 <strong style={{color:"var(--text)"}}>5.</strong> Crie <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("chores")}>Tarefas</span> e distribua entre a família<br/>
 <strong style={{color:"var(--text)"}}>6.</strong> Planeje o <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("meals")}>Cardápio</span> da semana<br/>
-<strong style={{color:"var(--text)"}}>7.</strong> Personalize tudo nas <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("settings")}>Configurações</span>
+<strong style={{color:"var(--text)"}}>7.</strong> Monte sua <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("routine")}>Rotina</span> — hábitos, tarefas pessoais e agenda<br/>
+<strong style={{color:"var(--text)"}}>8.</strong> Personalize tudo nas <span style={{color:"var(--accent)",cursor:"pointer",textDecoration:"underline"}} onClick={()=>goTo("settings")}>Configurações</span>
 </div>
 </div>
 {/* FAQ */}
@@ -1373,7 +1388,7 @@ return(<div><div className="ph"><div className="pt">Ajuda</div><div className="p
 {/* Detailed sections */}
 <div style={{fontSize:18,fontWeight:700,color:"var(--text)",marginBottom:16,marginTop:8}}>📖 Guia por seção</div>
 {sections.map(sec=>(<div className="card" key={sec.id}>
-<div className="ct" style={{cursor:"pointer"}} onClick={()=>goTo(sec.id==="config"?"settings":sec.id==="financas"?"budget":sec.id==="compras"?"grocery":sec.id==="despensa"?"pantry":sec.id==="cardapio"?"meals":sec.id==="tarefas"?"chores":sec.id)}>
+<div className="ct" style={{cursor:"pointer"}} onClick={()=>goTo(sec.id==="config"?"settings":sec.id==="financas"?"budget":sec.id==="compras"?"grocery":sec.id==="despensa"?"pantry":sec.id==="cardapio"?"meals":sec.id==="tarefas"?"chores":sec.id==="rotina"?"routine":sec.id)}>
 <span style={{fontSize:20}}>{sec.icon}</span>
 <span style={{color:sec.color}}>{sec.title}</span>
 <span style={{marginLeft:"auto",fontSize:12,color:"var(--accent)"}}>Abrir →</span>
