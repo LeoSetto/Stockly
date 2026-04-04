@@ -330,6 +330,19 @@ function Modal({title,onClose,children}){return(<div className="mo" onClick={onC
 function Toast({message,onUndo}){if(!message)return null;return<div className="toast">{I.check} {message}{onUndo&&<button onClick={onUndo} style={{marginLeft:8,padding:"4px 12px",borderRadius:6,fontSize:12,fontWeight:700,border:"1px solid var(--accent)",background:"transparent",color:"var(--accent)",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",transition:"all .2s"}}>Desfazer</button>}</div>;}
 function TagEditor({items,onAdd,onRemove,placeholder="Novo item..."}){const[v,setV]=useState("");const add=()=>{const t=v.trim();if(t&&!items.includes(t)){onAdd(t);setV("");}};return(<div><div className="te">{items.map(t=><div className="tc" key={t}>{t}<button onClick={()=>onRemove(t)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={12}/></button></div>)}</div><div className="ta"><input value={v} onChange={e=>setV(e.target.value)} placeholder={placeholder} onKeyDown={e=>e.key==="Enter"&&add()}/><button className="btn bp bs" onClick={add}>{I.plus}</button></div></div>);}
 
+// ─── Money Input (currency mask) ───
+function MoneyInput({value,onChange,placeholder,autoFocus,onKeyDown,style}){
+const fmt=(v)=>{const n=Math.round(Number(v)*100);if(!n)return"";const s=String(n).padStart(3,"0");return s.slice(0,-2)+","+s.slice(-2);};
+const parse=(raw)=>{const digits=raw.replace(/\D/g,"");if(!digits)return 0;return Number(digits)/100;};
+const[display,setDisplay]=useState(()=>fmt(value));
+useEffect(()=>{const f=fmt(value);if(f!==display&&document.activeElement!==ref.current)setDisplay(f);},[value]);
+const ref=useRef(null);
+const handleChange=(e)=>{const raw=e.target.value;const digits=raw.replace(/\D/g,"");if(digits.length>10)return;const num=Number(digits)/100;setDisplay(digits?String(digits).padStart(3,"0").replace(/^0*(\d+)(\d{2})$/,"$1,$2").replace(/^,/,"0,"):""  );onChange(num);};
+const handleFocus=()=>{if(!display&&!value)setDisplay("");};
+const handleBlur=()=>{setDisplay(fmt(value));};
+return(<input ref={ref} inputMode="numeric" value={display} onChange={handleChange} onFocus={handleFocus} onBlur={handleBlur} placeholder={placeholder||"0,00"} autoFocus={autoFocus} onKeyDown={onKeyDown} style={{textAlign:"right",...(style||{})}}/>);
+}
+
 // ─── Confirm Delete (hold to delete) ───
 function ConfirmDelete({onConfirm,children,label}){
 const[confirming,setConfirming]=useState(false);
@@ -529,7 +542,7 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 {isVW(priceModal.category)&&<div style={{display:"flex",gap:8,marginBottom:16}}><button className={`btn ${!lotsMode?"bp":"bg"} bs`} onClick={()=>{setLotsMode(false);setLots([]);}}>Preço único</button><button className={`btn ${lotsMode?"bp":"bg"} bs`} onClick={()=>{setLotsMode(true);if(lots.length===0)setLots([{id:1,weight:"",price:""}]);}}>Vários lotes</button></div>}
 {!lotsMode&&<>
 <div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>{isCountable(priceModal.unit)?`Quanto custa cada ${priceModal.unit}? (opcional)`:`Quanto custa o ${priceModal.name} de ${priceModal.qty}${priceModal.unit}? (opcional)`}</div>
-<div className="fr"><div className="fg"><label className="fl">{isCountable(priceModal.unit)?"Preço por "+priceModal.unit:"Preço total"}</label><input type="number" step="0.01" value={unitPriceVal} onChange={e=>setUnitPriceVal(e.target.value)} placeholder="0.00" autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
+<div className="fr"><div className="fg"><label className="fl">{isCountable(priceModal.unit)?"Preço por "+priceModal.unit:"Preço total"}</label><MoneyInput value={unitPriceVal} onChange={v=>setUnitPriceVal(v)} autoFocus onKeyDown={e=>e.key==="Enter"&&confirmCheck()}/></div>
 <div className="fg"><label className="fl">Item</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{priceModal.qty} {priceModal.unit}</div></div></div>
 {Number(unitPriceVal)>0&&isCountable(priceModal.unit)&&priceModal.qty>1&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(unitPriceVal)*(priceModal.qty||1))}</div>}
 {Number(unitPriceVal)>0&&!isCountable(priceModal.unit)&&<div style={{fontSize:14,fontWeight:600,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>{priceModal.name} ({priceModal.qty}{priceModal.unit}): {fmt(Number(unitPriceVal))}</div>}
@@ -539,7 +552,7 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 {lots.map((lot,idx)=>(<div key={lot.id} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
 <span style={{fontSize:12,color:"var(--text3)",fontWeight:700,minWidth:24}}>{idx+1}.</span>
 <div style={{flex:1}}><input type="number" step="0.001" value={lot.weight} onChange={e=>updateLot(lot.id,"weight",e.target.value)} placeholder={`Peso (${priceModal.unit||"kg"})`} style={{fontSize:14}}/></div>
-<div style={{flex:1}}><input type="number" step="0.01" value={lot.price} onChange={e=>updateLot(lot.id,"price",e.target.value)} placeholder="Preço (R$)" style={{fontSize:14}} onKeyDown={e=>{if(e.key==="Enter"){if(idx===lots.length-1)addLot();}}}/></div>
+<div style={{flex:1}}><MoneyInput value={lot.price} onChange={v=>updateLot(lot.id,"price",v)} placeholder="Preço" style={{fontSize:14}} onKeyDown={e=>{if(e.key==="Enter"){if(idx===lots.length-1)addLot();}}}/></div>
 {lots.length>1&&<button className="bi" onClick={()=>removeLot(lot.id)} style={{padding:4,flexShrink:0}}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button>}
 </div>))}
 <button className="btn bg bs" onClick={addLot} style={{marginBottom:12}}>+ Adicionar lote</button>
@@ -549,7 +562,7 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div className="ma"><button className="btn bg" onClick={skipPrice}>Pular</button><button className="btn bp" onClick={confirmCheck}>Registrar</button></div>
 </Modal>}
 {editingPrice&&<Modal title={`Editar preço: ${editingPrice.name}`} onClose={()=>setEditingPrice(null)}>
-<div className="fr"><div className="fg"><label className="fl">{isCountable(editingPrice.unit)?"Preço por "+editingPrice.unit:"Preço total"}</label><input type="number" step="0.01" value={editUP} onChange={e=>setEditUP(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditPrice()}/></div>
+<div className="fr"><div className="fg"><label className="fl">{isCountable(editingPrice.unit)?"Preço por "+editingPrice.unit:"Preço total"}</label><MoneyInput value={editUP} onChange={v=>setEditUP(v)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditPrice()}/></div>
 <div className="fg"><label className="fl">Item</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:14,color:"var(--text2)"}}>{editingPrice.qty} {editingPrice.unit}</div></div></div>
 {Number(editUP)>0&&isCountable(editingPrice.unit)&&editingPrice.qty>1&&<div style={{fontSize:16,fontWeight:700,color:"var(--accent)",marginTop:8,padding:"10px 14px",background:"var(--accent-glow)",borderRadius:8,textAlign:"center"}}>Total: {fmt(Number(editUP)*(editingPrice.qty||1))}</div>}
 <div className="ma"><button className="btn bg" onClick={()=>setEditingPrice(null)}>Cancelar</button><button className="btn bp" onClick={saveEditPrice}>Salvar</button></div>
@@ -672,13 +685,13 @@ const hasPayers=payers.length>0;
 const[newPerson,setNewPerson]=useState("");
 const addPerson=()=>{const n=newPerson.trim();if(!n||n===myName||payers.find(p=>p.name===n))return;toggleSplitPayer(n);setNewPerson("");};
 return(<div style={{background:"var(--bg3)",borderRadius:10,padding:16}}>
-<div className="fr"><div className="fg"><label className="fl">Valor total da conta</label><input type="number" step="0.01" value={form.splitTotal||""} onChange={e=>{const st=Number(e.target.value)||0;const ot=payers.reduce((a,p)=>a+p.amount,0);setForm({...form,splitTotal:e.target.value,splitMyShare:Math.max(0,st-ot)});}}/></div>
+<div className="fr"><div className="fg"><label className="fl">Valor total da conta</label><MoneyInput value={form.splitTotal||0} onChange={v=>{const ot=payers.reduce((a,p)=>a+p.amount,0);setForm({...form,splitTotal:v,splitMyShare:Math.max(0,v-ot)});}}/></div>
 <div className="fg"><label className="fl">Minha parte ({myName})</label><div style={{padding:"10px 14px",background:"var(--bg4)",borderRadius:8,fontSize:16,fontWeight:700,color:"var(--accent)"}}>{fmt(Number(form.splitMyShare)||0)}</div></div></div>
 <div style={{marginTop:8}}><label className="fl" style={{marginBottom:8,display:"block"}}>Quem mais paga?</label>
 <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>{allMembers.filter(m=>m!==myName&&!payers.find(p=>p.name===m)).map(m=>(<button key={m} className="btn bg bs" onClick={()=>toggleSplitPayer(m)} style={{borderRadius:20}}>{m}</button>))}</div>
 <div style={{display:"flex",gap:8,marginBottom:10}}><input value={newPerson} onChange={e=>setNewPerson(e.target.value)} placeholder="Outra pessoa..." onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{flex:1,padding:"8px 12px",fontSize:13}}/><button className="btn bp bs" onClick={addPerson} style={{flexShrink:0}}>+ Adicionar</button></div>
 </div>
-{payers.map(p=>(<div key={p.name} className="fr" style={{marginBottom:6,alignItems:"center"}}><div className="fg"><label className="fl">{p.name} paga</label><input type="number" step="0.01" value={p.amount||""} onChange={e=>setSplitPayerAmount(p.name,e.target.value)} placeholder="0.00"/></div><button className="bi" onClick={()=>toggleSplitPayer(p.name)} title="Remover" style={{marginTop:16,flexShrink:0}}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button></div>))}
+{payers.map(p=>(<div key={p.name} className="fr" style={{marginBottom:6,alignItems:"center"}}><div className="fg"><label className="fl">{p.name} paga</label><MoneyInput value={p.amount||0} onChange={v=>setSplitPayerAmount(p.name,v)}/></div><button className="bi" onClick={()=>toggleSplitPayer(p.name)} title="Remover" style={{marginTop:16,flexShrink:0}}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button></div>))}
 {hasPayers&&<div style={{fontSize:13,marginTop:8,padding:"8px 12px",borderRadius:8,background:"var(--purple-bg)",color:"var(--purple)"}}>Total: {fmt(Number(form.splitTotal)||0)} = {myName}: {fmt(Number(form.splitMyShare)||0)}{payers.map(p=>` + ${p.name}: ${fmt(p.amount)}`).join("")}{mismatch&&<span style={{color:"var(--red)",fontWeight:600}}> ⚠ Valores não batem</span>}</div>}
 </div>);
 }
@@ -827,7 +840,7 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 {(()=>{if(!modal)return null;
 const hasSplit=Number(form.splitTotal)>0;const hasInstall=Number(form.installments)>1;const labelVal=hasSplit?"Valor (minha parte)":"Valor";
 return(<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>setModal(null)}>
-<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">{labelVal}</label><input type="number" step="0.01" value={form.amount||""} onChange={e=>setForm({...form,amount:e.target.value})}/></div></div>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">{labelVal}</label><MoneyInput value={form.amount||0} onChange={v=>setForm({...form,amount:v})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Tipo</label><select value={form.type||"variavel"} onChange={e=>setForm({...form,type:e.target.value})}><option value="fixo">Fixo</option><option value="variavel">Variável</option></select></div>
 <div className="fg"><label className="fl">Categoria</label><select value={form.category||c.expenseCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.expenseCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div></div>
 <div className="fr"><div className="fg"><label className="fl">Cartão / Pagamento</label><select value={form.card||""} onChange={e=>setForm({...form,card:e.target.value})}><option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div>
@@ -851,7 +864,7 @@ return(<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>set
 </Modal>);})()}
 {/* Income modal */}
 {incModal&&<Modal title={incModal==="add"?"Nova Receita":"Editar Receita"} onClose={()=>setIncModal(null)}>
-<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={incForm.desc||""} onChange={e=>setIncForm({...incForm,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><input type="number" step="0.01" value={incForm.amount||""} onChange={e=>setIncForm({...incForm,amount:e.target.value})}/></div></div>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Descrição</label><input value={incForm.desc||""} onChange={e=>setIncForm({...incForm,desc:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Valor</label><MoneyInput value={incForm.amount||0} onChange={v=>setIncForm({...incForm,amount:v})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={incForm.category||(c.incomeCategories||[])[0]||""} onChange={e=>setIncForm({...incForm,category:e.target.value})}>{(c.incomeCategories||[]).map(ct=><option key={ct}>{ct}</option>)}</select></div>
 <div className="fg"><label className="fl">Data</label><input type="date" value={incForm.date||today()} onChange={e=>setIncForm({...incForm,date:e.target.value})}/></div></div>
 <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4,marginBottom:8,cursor:"pointer"}} onClick={()=>setIncForm({...incForm,recurring:!incForm.recurring})}>
@@ -861,7 +874,7 @@ return(<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>set
 {/* Budget by category modal */}
 {budgetCatModal&&<Modal title="Orçamento por Categoria" onClose={()=>setBudgetCatModal(false)}>
 <div style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Defina quanto planeja gastar em cada categoria. Deixe em branco para não limitar.</div>
-{c.expenseCategories.map(cat=>(<div className="fr" key={cat} style={{marginBottom:8}}><div className="fg"><label className="fl">{cat}</label><input type="number" step="0.01" value={budgetCatForm[cat]||""} onChange={e=>setBudgetCatForm({...budgetCatForm,[cat]:e.target.value})} placeholder="0.00"/></div></div>))}
+{c.expenseCategories.map(cat=>(<div className="fr" key={cat} style={{marginBottom:8}}><div className="fg"><label className="fl">{cat}</label><MoneyInput value={budgetCatForm[cat]||0} onChange={v=>setBudgetCatForm({...budgetCatForm,[cat]:v})}/></div></div>))}
 <div className="ma"><button className="btn bg" onClick={()=>setBudgetCatModal(false)}>Cancelar</button><button className="btn bp" onClick={saveBudgetCat}>Salvar</button></div></Modal>}
 {/* Carry forward modal */}
 {carryModal&&<Modal title={`Enviar contas → ${fmtMonth(nextMonth(selMonth))}`} onClose={()=>setCarryModal(false)}>
@@ -1149,7 +1162,7 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 </div>);})}
 {modal&&<Modal title="Registrar Preço" onClose={()=>setModal(null)}>
 <div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Produto</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ex: Arroz" autoFocus list="price-products"/><datalist id="price-products">{[...new Set(ph.map(p=>p.name))].map(n=><option key={n} value={n}/>)}</datalist></div>
-<div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={form.price||""} onChange={e=>setForm({...form,price:e.target.value})} placeholder="0.00"/></div></div>
+<div className="fg"><label className="fl">Preço unitário</label><MoneyInput value={form.price||0} onChange={v=>setForm({...form,price:v})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div>
 <div className="fg"><label className="fl">Unidade</label><select value={form.unit||c.units[0]} onChange={e=>setForm({...form,unit:e.target.value})}>{c.units.map(u=><option key={u}>{u}</option>)}</select></div>
 <div className="fg"><label className="fl">Data</label><input type="date" value={form.date||today()} onChange={e=>setForm({...form,date:e.target.value})}/></div></div>
@@ -1158,7 +1171,7 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 </Modal>}
 {editEntry&&<Modal title="Editar Preço" onClose={()=>setEditEntry(null)}>
 <div style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>{editEntry.name} — {new Date(editEntry.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long",year:"numeric"})}</div>
-<div className="fr"><div className="fg"><label className="fl">Preço unitário</label><input type="number" step="0.01" value={editVal} onChange={e=>setEditVal(e.target.value)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditEntry()}/></div></div>
+<div className="fr"><div className="fg"><label className="fl">Preço unitário</label><MoneyInput value={editVal} onChange={v=>setEditVal(v)} autoFocus onKeyDown={e=>e.key==="Enter"&&saveEditEntry()}/></div></div>
 {Number(editVal)>0&&<div style={{fontSize:14,fontWeight:600,color:"var(--accent)",marginTop:4}}>Total ({editEntry.qty} {editEntry.unit}): {fmt(Number(editVal)*(editEntry.qty||1))}</div>}
 <div className="ma"><button className="btn bd bs" onClick={()=>{delEntry(editEntry.id);setEditEntry(null);}}>Excluir registro</button><button className="btn bg" onClick={()=>setEditEntry(null)}>Cancelar</button><button className="btn bp" onClick={saveEditEntry}>Salvar</button></div>
 </Modal>}
@@ -1436,7 +1449,7 @@ return(<>
 {items.map((item,idx)=>(<div key={item.id} style={{display:"flex",gap:8,alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--border)",opacity:item.include?1:.4}}>
 <div style={{width:22,height:22,borderRadius:5,border:`2px solid ${item.include?"var(--green)":"var(--border2)"}`,background:item.include?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}} onClick={()=>toggleItem(item.id)}>{item.include&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={12} color="#fff"/>}</div>
 <input value={item.name} onChange={e=>updateItem(item.id,"name",e.target.value)} placeholder="Nome do item" style={{flex:2,padding:"6px 8px",fontSize:13}}/>
-<input type="number" step="0.01" value={item.price||""} onChange={e=>updateItem(item.id,"price",Number(e.target.value)||0)} placeholder="Preço" style={{width:80,padding:"6px 8px",fontSize:13,textAlign:"right"}}/>
+<MoneyInput value={item.price||0} onChange={v=>updateItem(item.id,"price",v)} placeholder="Preço" style={{width:80,padding:"6px 8px",fontSize:13}}/>
 <button style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",padding:4,flexShrink:0}} onClick={()=>removeItem(item.id)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button>
 </div>))}
 </div>
