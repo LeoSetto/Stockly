@@ -185,50 +185,132 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 .sst{font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .m-card{transition:all .2s cubic-bezier(.4,0,.2,1)}.m-card:active{transform:scale(.98);background:var(--bg4)}
 @media(max-width:768px){
-.sb{transform:translateX(-100%);width:280px;-webkit-overflow-scrolling:touch}
+/* Core layout */
+.sb{transform:translateX(-100%);width:280px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .sb.open{transform:translateX(0)}
-.mc{margin-left:0;padding:68px 14px 24px}
-.mh{display:flex}
-.sg{grid-template-columns:1fr 1fr;gap:10px}
-.sc{padding:14px}
-.sv{font-size:22px}
-.sl{font-size:10px;letter-spacing:1px}
-.dg{grid-template-columns:1fr}
-.mg{grid-template-columns:1fr 1fr}
-.fr{flex-direction:column}.fg{min-width:100%}
-.ph{margin-bottom:20px}
-.pt{font-size:24px}
-.ps{font-size:13px}
-.card{padding:16px;margin-bottom:14px;border-radius:12px}
-.ct{font-size:15px;margin-bottom:12px}
-.tb{gap:8px;margin-bottom:14px}
-.btn{padding:8px 14px;font-size:12px}
+.mc{margin-left:0;padding:60px 12px 80px;max-width:100vw;overflow-x:hidden}
+.mh{display:flex;height:52px}
+.app{overflow-x:hidden;max-width:100vw}
+
+/* Typography */
+.ph{margin-bottom:16px}
+.pt{font-size:22px}
+.ps{font-size:12px}
+
+/* Stat cards - scroll horizontal */
+.sg{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;margin-bottom:20px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.sg::-webkit-scrollbar{display:none}
+.sc{min-width:150px;flex-shrink:0;scroll-snap-align:start;padding:14px}
+.sv{font-size:20px}
+.sl{font-size:9px;letter-spacing:1px;margin-bottom:4px}
+.sd{font-size:11px}
+
+/* Dashboard grid */
+.dg{grid-template-columns:1fr;gap:12px}
+
+/* Cards */
+.card{padding:14px;margin-bottom:10px;border-radius:12px}
+.ct{font-size:14px;margin-bottom:10px}
+
+/* Toolbar - stack vertically */
+.tb{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.tb select{width:100%}
+.tr{margin-left:0;width:100%;display:flex;gap:8px}
+.tr .btn{flex:1}
+
+/* Search bar */
+.sb-i{margin-bottom:12px}
+.sb-i input{font-size:16px;padding:10px 14px 10px 40px}
+
+/* Buttons */
+.btn{padding:8px 12px;font-size:12px;white-space:nowrap}
 .bp{padding:8px 14px}
 .bs{padding:5px 10px;font-size:11px}
 .bi{padding:6px}
+
+/* Filter buttons - horizontal scroll */
+.filter-scroll{display:flex;overflow-x:auto;gap:6px;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin:-2px}
+.filter-scroll::-webkit-scrollbar{display:none}
+.filter-scroll .btn{flex-shrink:0}
+
+/* Tables hidden, cards shown */
 table{display:none}
 .m-cards{display:flex;flex-direction:column;gap:8px}
-.m-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
-.m-card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.m-card-n{font-size:14px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.m-card-r{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--text2);align-items:center}
-.m-card-a{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
-.m-card-a .bi{padding:6px;border-radius:6px}
-.tg{font-size:10px;padding:2px 8px}
+.m-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}
+.m-card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.m-card-n{font-size:13px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-card-r{display:flex;flex-wrap:wrap;gap:4px;font-size:11px;color:var(--text2);align-items:center}
+.m-card-a{display:flex;gap:6px;margin-top:6px;justify-content:flex-end}
+.m-card-a .bi{padding:5px;border-radius:6px}
+
+/* Tags smaller */
+.tg{font-size:10px;padding:2px 7px}
+
+/* Modal - bottom sheet */
 .mo{align-items:flex-end;padding:0}
-.md{width:100%;max-width:100%;border-radius:20px 20px 0 0;max-height:92vh;padding:20px 18px;animation:slideUp .25s ease}
-@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.mdt{font-size:18px;margin-bottom:16px}
-.ma{margin-top:16px}
-input,select,textarea{font-size:16px;padding:12px 14px}
-.toast{bottom:16px;right:16px;left:16px;font-size:12px;padding:10px 16px}
-.sb-i input{font-size:16px}
-select{font-size:14px}
-.cr{padding:10px 14px;gap:10px}
+.md{width:100%;max-width:100%;border-radius:16px 16px 0 0;max-height:90vh;padding:20px 16px;animation:slideUp .25s cubic-bezier(.4,0,.2,1)}
+@keyframes slideUp{from{transform:translateY(100%);opacity:.8}to{transform:translateY(0);opacity:1}}
+.mdt{font-size:17px;margin-bottom:14px}
+.ma{margin-top:14px}
+.ma .btn{flex:1}
+
+/* Inputs */
+input,select,textarea{font-size:16px;padding:11px 12px}
+select{font-size:14px;width:100%}
+
+/* Toast */
+.toast{bottom:14px;right:12px;left:12px;font-size:12px;padding:10px 14px;border-radius:10px}
+
+/* Lists */
+.cr{padding:10px 12px;gap:8px}
 .cx{font-size:13px}
 .cm{font-size:11px}
-.cb-c{height:100px}
+
+/* Chart bars */
+.cb-c{height:90px}
+.cb-l{font-size:9px}
+.cb-v{font-size:10px}
+
+/* Meals grid */
+.mg{grid-template-columns:1fr 1fr;gap:8px}
+.mk{padding:10px;min-height:60px}
+.mt{font-size:10px;margin-bottom:4px}
+.mr{font-size:12px}
+
+/* Forms in modal - always stack */
+.fr{flex-direction:column;gap:8px;margin-bottom:8px}
+.fg{min-width:100%}
+.fl{font-size:10px}
+
+/* Settings tabs - scroll */
+.sst{font-size:11px;letter-spacing:1.5px;margin-bottom:8px}
+
+/* Progress bar */
+.pb{height:6px;margin-top:6px}
+
+/* Effort dots */
+.eo{width:7px;height:7px}
+
+/* Di rows */
+.di{padding:8px 0;font-size:12px;gap:8px}
+
+/* Tag editor */
+.te{gap:6px}.tc{padding:4px 10px;font-size:12px}
+.ta input{padding:8px 10px;font-size:14px}
+
+/* Theme/color selectors */
+.thg{grid-template-columns:repeat(3,1fr);gap:8px}
+.thc{padding:10px;font-size:11px}
+.cg{gap:6px}
+.cd{width:28px;height:28px}
+
+/* Misc inline fixes */
+.logo{font-size:22px}
+.logo-s{font-size:10px;letter-spacing:2px}
+.ni{padding:10px 14px;font-size:13px;gap:10px}
 }
+
+/* Visibility helpers */
 @media(max-width:768px){.m-only{display:flex}.d-only{display:none}}
 @media(min-width:769px){.m-only{display:none}.d-only{display:block}}
 `;
@@ -328,9 +410,9 @@ const del=(id)=>{setData(d=>({...d,pantry:d.pantry.filter(i=>i.id!==id)}));toast
 const toGrocery=(item)=>{setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:item.name,qty:1,unit:item.unit,checked:false,category:item.category}]}));toast(`"${item.name}" → lista`);};
 const w=c.expiryWarnDays||7;const shared=mode==="shared";
 return(<div><div className="ph"><div className="pt">Despensa</div><div className="ps">Controle completo do que tem em casa</div></div>
-<div className="tb"><div className="sb-i" style={{marginBottom:0,flex:1,maxWidth:320}}>{I.search}<input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
-<select value={fL} onChange={e=>setFL(e.target.value)} style={{width:140}}><option>Todos</option>{c.locations.map(l=><option key={l}>{l}</option>)}</select>
-<select value={fC} onChange={e=>setFC(e.target.value)} style={{width:140}}><option>Todos</option>{c.pantryCategories.map(ct=><option key={ct}>{ct}</option>)}</select>
+<div className="tb"><div className="sb-i" style={{marginBottom:0,flex:1}}>{I.search}<input placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+<div style={{display:"flex",gap:8,flex:1}}><select value={fL} onChange={e=>setFL(e.target.value)} style={{flex:1}}><option>Todos os locais</option>{c.locations.map(l=><option key={l}>{l}</option>)}</select>
+<select value={fC} onChange={e=>setFC(e.target.value)} style={{flex:1}}><option>Todas categorias</option>{c.pantryCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div>
 <div className="tr"><button className="btn bp" onClick={openAdd}>{I.plus} Adicionar</button></div></div>
 <div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th>Item</th><th>Qtd</th><th>Local</th><th>Categoria</th><th>Validade</th><th>Status</th><th></th></tr></thead><tbody>
 {filtered.map(item=>{const d=daysUntil(item.expiry);const st=!item.expiry?"tg-n":d<0?"tg-r":d<=3?"tg-y":d<=w?"tg-b":"tg-g";const sx=!item.expiry?"—":d<0?"Vencido":d===0?"Hoje!":d<=w?`${d}d`:"OK";
@@ -666,11 +748,11 @@ const cardColors=["#60A5FA","#4ADE80","#F0A050","#A78BFA","#F87171","#FBBF24","#
 const expDesc=(e)=>{let d=e.desc;let tags=[];if(e.recurrence){tags.push({label:RECURRENCES.find(r=>r.v===e.recurrence)?.l||e.recurrence,cls:"tg-b"});}if(e.installments>0){tags.push({label:`${e.currentInstallment||1}/${e.installments}`,cls:"tg-p"});}if(e.splitTotal>0){tags.push({label:"Dividido",cls:"tg-y"});}return{d,tags};};
 return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div className="ps">Controle completo: receitas, gastos, saldo e orçamento</div></div>
 {/* Month selector */}
-<div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,flexWrap:"wrap"}}>
-<button className="bi" onClick={()=>{const idx=months.indexOf(selMonth);if(idx<months.length-1)setSelMonth(months[idx+1]);}} style={{padding:8}}><Icon d={<polyline points="15 18 9 12 15 6"/>} size={18}/></button>
-<select value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{minWidth:200,fontSize:16,fontWeight:700,background:"var(--bg3)",textTransform:"capitalize"}}>{months.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}</select>
-<button className="bi" onClick={()=>{const idx=months.indexOf(selMonth);if(idx>0)setSelMonth(months[idx-1]);}} style={{padding:8}}><Icon d={<polyline points="9 18 15 12 9 6"/>} size={18}/></button>
-<div style={{marginLeft:"auto",display:"flex",gap:8}}><button className="btn bg bs" onClick={openCarry} title="Copiar contas para o próximo mês">📋 Enviar p/ próximo mês</button></div>
+<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:20}}>
+<button className="bi" onClick={()=>{const idx=months.indexOf(selMonth);if(idx<months.length-1)setSelMonth(months[idx+1]);}} style={{padding:8,flexShrink:0}}><Icon d={<polyline points="15 18 9 12 15 6"/>} size={18}/></button>
+<select value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{flex:1,fontSize:15,fontWeight:700,background:"var(--bg3)",textTransform:"capitalize"}}>{months.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}</select>
+<button className="bi" onClick={()=>{const idx=months.indexOf(selMonth);if(idx>0)setSelMonth(months[idx-1]);}} style={{padding:8,flexShrink:0}}><Icon d={<polyline points="9 18 15 12 9 6"/>} size={18}/></button>
+<button className="btn bg bs" onClick={openCarry} style={{flexShrink:0}} title="Copiar contas para o próximo mês">📋</button>
 </div>
 {/* Summary cards */}
 <div className="sg">
@@ -700,10 +782,10 @@ return(<div><div className="ph"><div className="pt">Finanças da Casa</div><div 
 {c.expenseCategories.filter(cat=>bc[cat]||budgetByCat[cat]).length===0?<div style={{color:"var(--text3)",fontSize:13}}>Defina orçamentos por categoria e acompanhe os gastos reais</div>:
 <div style={{display:"flex",flexDirection:"column",gap:10}}>{c.expenseCategories.filter(cat=>bc[cat]||budgetByCat[cat]).map(cat=>{const real=bc[cat]||0;const plan=budgetByCat[cat]||0;const catPct=plan>0?Math.min((real/plan)*100,100):0;return(<div key={cat} style={{background:"var(--bg3)",borderRadius:10,padding:"12px 16px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={{fontSize:14,fontWeight:600}}>{cat}</span><div style={{display:"flex",gap:12,alignItems:"center"}}><span style={{fontSize:13,color:plan>0&&real>plan?"var(--red)":"var(--text2)"}}>{fmt(real)}{plan>0&&<span style={{color:"var(--text3)"}}> / {fmt(plan)}</span>}</span>{plan>0&&<span style={{fontSize:12,fontWeight:600,color:catPct>90?"var(--red)":catPct>70?"var(--yellow)":"var(--green)"}}>{catPct.toFixed(0)}%</span>}</div></div>{plan>0&&<div className="pb" style={{marginTop:0}}><div className="pf" style={{width:`${catPct}%`,background:catPct>90?"var(--red)":catPct>70?"var(--yellow)":"var(--green)"}}/></div>}</div>);})}</div>}</div>
 {/* Totals by card */}
-{Object.keys(byCard).length>0&&<div className="card"><div className="ct">💳 Totais por Cartão</div><div style={{display:"flex",gap:12,flexWrap:"wrap"}}>{Object.entries(byCard).sort((a,b)=>b[1]-a[1]).map(([card,val],idx)=>(<div key={card} style={{background:"var(--bg3)",borderRadius:10,padding:"14px 18px",flex:"1 1 160px",borderLeft:`4px solid ${cardColors[idx%cardColors.length]}`}}><div style={{fontSize:12,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1,fontWeight:600}}>{card}</div><div style={{fontSize:20,fontWeight:700,marginTop:4}}>{fmt(val)}</div><div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{totalExpense>0?((val/totalExpense)*100).toFixed(0):0}% do total</div></div>))}</div></div>}
+{Object.keys(byCard).length>0&&<div className="card"><div className="ct">💳 Totais por Cartão</div><div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{Object.entries(byCard).sort((a,b)=>b[1]-a[1]).map(([card,val],idx)=>(<div key={card} style={{background:"var(--bg3)",borderRadius:10,padding:"12px 14px",flex:"1 1 calc(50% - 10px)",minWidth:0,borderLeft:`4px solid ${cardColors[idx%cardColors.length]}`}}><div style={{fontSize:11,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{card}</div><div style={{fontSize:18,fontWeight:700,marginTop:2}}>{fmt(val)}</div><div style={{fontSize:10,color:"var(--text3)",marginTop:1}}>{totalExpense>0?((val/totalExpense)*100).toFixed(0):0}%</div></div>))}</div></div>}
 {/* Expenses list */}
 <div className="tb" style={{marginTop:4}}><button className="btn bp" onClick={()=>{setForm({desc:"",amount:"",category:c.expenseCategories[0],date:selMonth+"-"+new Date().toISOString().slice(8,10),paid:false,card:c.cards?.[0]||"",type:"variavel",recurrence:"",installments:"",currentInstallment:1,splitTotal:"",splitMyShare:"",splitPayers:[]});setModal("add");}}>{I.plus} Novo Gasto</button>
-<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[{k:"all",l:"Todos"},{k:"fixo",l:"Fixos"},{k:"variavel",l:"Variáveis"},{k:"parcelado",l:"Parcelados"},{k:"recorrente",l:"Recorrentes"},{k:"pending",l:"Pendentes"},{k:"paid",l:"Pagos"}].map(f=><button key={f.k} className={`btn ${filter===f.k?"bp":"bg"} bs`} onClick={()=>setFilter(f.k)}>{f.l}</button>)}</div></div>
+<div className="filter-scroll" style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[{k:"all",l:"Todos"},{k:"fixo",l:"Fixos"},{k:"variavel",l:"Variáveis"},{k:"parcelado",l:"Parcelados"},{k:"recorrente",l:"Recorrentes"},{k:"pending",l:"Pendentes"},{k:"paid",l:"Pagos"}].map(f=><button key={f.k} className={`btn ${filter===f.k?"bp":"bg"} bs`} onClick={()=>setFilter(f.k)}>{f.l}</button>)}</div></div>
 <div className="card" style={{padding:0,overflow:"hidden"}}><div style={{overflowX:"auto"}}><table><thead><tr><th style={{width:40}}>Pago</th><th>Descrição</th><th>Meu Valor</th><th>Tipo</th><th>Cartão</th><th>Categoria</th><th>Data</th><th></th></tr></thead><tbody>
 {filtered.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{const{d:eDesc,tags}=expDesc(e);const myAmt=getMyAmount(e);return(<tr key={e.id} style={{borderLeft:e.type==="fixo"?"3px solid var(--blue)":e.installments>0?"3px solid var(--purple)":"3px solid var(--accent)"}}>
 <td><div style={{width:24,height:24,borderRadius:6,border:`2px solid ${e.paid?"var(--green)":"var(--yellow)"}`,background:e.paid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .2s"}} onClick={()=>togglePaid(e.id)}>{e.paid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div></td>
@@ -861,7 +943,7 @@ const imp=()=>{const inp=document.createElement("input");inp.type="file";inp.acc
 const reset=()=>{if(confirm("Resetar tudo?")){setData(DEFAULT_DATA);toast("Resetado");}};
 const tabs=[{id:"geral",label:"Geral",icon:I.home},{id:"casa",label:"Casa",icon:I.users},{id:"aparencia",label:"Aparência",icon:I.palette},{id:"categorias",label:"Categorias",icon:I.tag},{id:"listas",label:"Listas",icon:I.sliders},{id:"dados",label:"Dados",icon:I.download}];
 return(<div><div className="ph"><div className="pt">Configurações</div><div className="ps">Personalize absolutamente tudo</div></div>
-<div style={{display:"flex",gap:4,marginBottom:24,flexWrap:"wrap"}}>{tabs.map(t=><button key={t.id} className={`btn ${tab===t.id?"bp":"bg"} bs`} onClick={()=>setTab(t.id)} style={{gap:6}}>{t.icon} {t.label}</button>)}</div>
+<div className="filter-scroll" style={{display:"flex",gap:4,marginBottom:24,flexWrap:"wrap"}}>{tabs.map(t=><button key={t.id} className={`btn ${tab===t.id?"bp":"bg"} bs`} onClick={()=>setTab(t.id)} style={{gap:6}}>{t.icon} {t.label}</button>)}</div>
 
 {tab==="geral"&&<><div className="card"><div className="sst">{I.home} Nome da Casa</div><div className="fg" style={{maxWidth:360}}><input value={c.houseName} onChange={e=>uc("houseName",e.target.value)}/></div></div>
 <div className="card"><div className="sst">{I.users} Membros</div><div className="te">{data.members.map(m=><div className="tc" key={m}>{m}<button onClick={()=>rmM(m)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={12}/></button></div>)}</div><div className="ta"><input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Novo membro" onKeyDown={e=>e.key==="Enter"&&addM()}/><button className="btn bp bs" onClick={addM}>{I.plus}</button></div></div>
