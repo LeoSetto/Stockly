@@ -15,9 +15,12 @@
 
     body {
       background: #0C0F14;
-      overflow: hidden;
       height: 100vh;
       width: 100vw;
+    }
+
+    body.splash-active {
+      overflow: hidden;
     }
 
     #splash {
@@ -183,7 +186,7 @@
     }
   </style>
 </head>
-<body>
+<body class="splash-active">
   <!-- Splash Screen -->
   <div id="splash">
     <div class="splash-glow"></div>
@@ -211,6 +214,7 @@
     function hideSplash() {
       var splash = document.getElementById('splash');
       var root = document.getElementById('root');
+      document.body.classList.remove('splash-active');
       if (root) root.classList.add('ready');
       if (splash) splash.classList.add('hide');
       setTimeout(function() { if (splash) splash.remove(); }, 500);
