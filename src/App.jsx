@@ -508,6 +508,7 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 {hasLots&&<div style={{width:"100%",paddingLeft:34,display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>{i.lots.map((l,idx)=>(<span key={idx} style={{fontSize:10,background:"var(--bg4)",padding:"2px 8px",borderRadius:8,color:"var(--text3)"}}>{l.weight>0?`${l.weight}${i.unit} `:""}{fmt(l.price)}</span>))}</div>}
 </div>);})}
 </div>
+<ReceiptScanner data={data} setData={setData} toast={toast} c={c}/>
 {(data.shoppingTrips||[]).length>0&&<div className="card"><div className="ct">Últimas Compras</div>
 {(data.shoppingTrips||[]).slice(0,5).map(trip=>(<div key={trip.id} style={{borderBottom:"1px solid var(--border)",padding:"12px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -1164,7 +1165,7 @@ return(<div><div className="ph"><div className="pt">Preços</div><div className=
 </div>);}
 
 // ─── SETTINGS ───
-function SettingsPage({data,setData,toast,houseCode,houseInfo,leaveHouse,refreshHouseInfo,userPrefs,setUserPrefs,mode,toggleMode}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
+function SettingsPage({data,setData,toast,user,houseCode,houseInfo,leaveHouse,refreshHouseInfo,userPrefs,setUserPrefs,mode,toggleMode}){const c=data.config;const[nm,setNm]=useState("");const[tab,setTab]=useState("geral");
 const myTheme=userPrefs?.theme||c.theme||"dark";const myAccent=userPrefs?.accentColor||c.accentColor||"#F0A050";
 const uc=(k,v)=>setData(d=>({...d,config:{...d.config,[k]:v}}));
 const al=(k,v)=>{if(!v.trim()||c[k].includes(v.trim()))return;uc(k,[...c[k],v.trim()]);toast("Adicionado");};
@@ -1235,10 +1236,217 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">{I.meals} Dias do Cardápio</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Quais dias aparecem no planejador</p><TagEditor items={c.mealDays} onAdd={v=>al("mealDays",v)} onRemove={v=>rl("mealDays",v)}/></div>
 <div className="card"><div className="sst">🍽 Tipos de Refeição</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Café, almoço, jantar... ou o que quiser</p><TagEditor items={c.mealTypes} onAdd={v=>al("mealTypes",v)} onRemove={v=>rl("mealTypes",v)}/></div></>}
 
-{tab==="dados"&&<><div className="card"><div className="sst">{I.download} Exportar & Importar</div><p style={{fontSize:13,color:"var(--text2)",marginBottom:16,lineHeight:1.6}}>Backup completo: configurações, itens, tarefas, gastos e cardápio.</p><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="btn bp" onClick={exp}>{I.download} Exportar (JSON)</button><button className="btn bg" onClick={imp}>{I.upload} Importar</button></div></div>
+{tab==="dados"&&<><PDFReport data={data} user={user}/>
+<div className="card"><div className="sst">{I.download} Exportar & Importar</div><p style={{fontSize:13,color:"var(--text2)",marginBottom:16,lineHeight:1.6}}>Backup completo: configurações, itens, tarefas, gastos e cardápio.</p><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="btn bp" onClick={exp}>{I.download} Exportar (JSON)</button><button className="btn bg" onClick={imp}>{I.upload} Importar</button></div></div>
 <div className="card"><div className="sst" style={{color:"var(--red)"}}>⚠ Zona de Perigo</div><p style={{fontSize:13,color:"var(--text3)",marginBottom:12}}>Resetar tudo para o padrão. Irreversível.</p><button className="btn bd" onClick={reset}>{I.trash} Resetar Tudo</button></div>
 <div className="card"><div className="ct">Sobre</div><p style={{fontSize:13,color:"var(--text2)",lineHeight:1.7}}>Lar Centro — Hub completo de gestão doméstica. 100% customizável.</p><p style={{fontSize:12,color:"var(--text3)",marginTop:12}}>v3.0</p></div></>}
 </div>);}
+
+// ─── PDF REPORT GENERATOR ───
+function PDFReport({data,user}){
+const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
+const[month,setMonth]=useState(()=>new Date().toISOString().slice(0,7));
+const[generating,setGenerating]=useState(false);
+const fmtMonth=(m)=>{const[y,mo]=m.split("-");return new Date(Number(y),Number(mo)-1).toLocaleDateString(c.locale||"pt-BR",{month:"long",year:"numeric"});};
+const generate=()=>{
+setGenerating(true);
+setTimeout(()=>{
+const mExp=(data.expenses||[]).filter(e=>e.date&&e.date.startsWith(month));
+const mInc=(data.incomes||[]).filter(i=>i.date&&i.date.startsWith(month));
+const totalInc=mInc.reduce((a,i)=>a+i.amount,0);
+const totalExp=mExp.reduce((a,e)=>a+e.amount,0);
+const saldo=totalInc-totalExp;
+const byCat={};mExp.forEach(e=>{byCat[e.category]=(byCat[e.category]||0)+e.amount;});
+const byCard={};mExp.forEach(e=>{const k=e.card||"Sem cartão";byCard[k]=(byCard[k]||0)+e.amount;});
+const fixedT=mExp.filter(e=>e.type==="fixo").reduce((a,e)=>a+e.amount,0);
+const varT=mExp.filter(e=>e.type!=="fixo").reduce((a,e)=>a+e.amount,0);
+const paidT=mExp.filter(e=>e.paid).reduce((a,e)=>a+e.amount,0);
+const pendT=mExp.filter(e=>!e.paid).reduce((a,e)=>a+e.amount,0);
+const trips=(data.shoppingTrips||[]).filter(t=>t.date&&t.date.startsWith(month));
+const habits=data.habits||[];const logs=(data.habitLogs||[]).filter(l=>l.date&&l.date.startsWith(month));
+const userName=user?.displayName||user?.email||"Usuário";
+// Build HTML for PDF
+const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stockly — Relatório ${fmtMonth(month)}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e;background:#fff;padding:40px;max-width:800px;margin:0 auto;font-size:14px;line-height:1.6}
+.header{text-align:center;margin-bottom:40px;padding-bottom:24px;border-bottom:3px solid #F0A050}
+.header h1{font-size:28px;color:#F0A050;margin-bottom:4px}
+.header h2{font-size:18px;color:#333;font-weight:400;text-transform:capitalize}
+.header p{font-size:12px;color:#888;margin-top:8px}
+.section{margin-bottom:32px}
+.section h3{font-size:16px;color:#F0A050;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #eee}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}
+.stat{background:#f8f6f3;border-radius:10px;padding:16px;text-align:center}
+.stat .label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px}
+.stat .value{font-size:24px;font-weight:700;margin-top:4px}
+.stat .sub{font-size:11px;color:#888;margin-top:2px}
+.green{color:#22c55e}.red{color:#ef4444}.blue{color:#3b82f6}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#888;padding:8px 12px;border-bottom:2px solid #eee}
+td{padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:13px}
+tr:nth-child(even){background:#fafafa}
+.tag{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600}
+.tag-green{background:#dcfce7;color:#16a34a}.tag-red{background:#fef2f2;color:#dc2626}
+.tag-blue{background:#dbeafe;color:#2563eb}.tag-gray{background:#f3f4f6;color:#6b7280}
+.footer{text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #eee;font-size:11px;color:#aaa}
+.bar{height:8px;background:#f0f0f0;border-radius:4px;margin-top:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px}
+.cat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5}
+.cat-name{font-weight:500}.cat-val{font-weight:700}
+@media print{body{padding:20px}@page{margin:15mm}}
+</style></head><body>
+<div class="header">
+<h1>⚡ Stockly</h1>
+<h2>${fmtMonth(month)}</h2>
+<p>${c.houseName} — Relatório gerado por ${userName} em ${new Date().toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long",year:"numeric"})}</p>
+</div>
+<div class="section">
+<h3>💰 Resumo Financeiro</h3>
+<div class="grid">
+<div class="stat"><div class="label">Receitas</div><div class="value green">${fmt(totalInc)}</div><div class="sub">${mInc.length} entrada${mInc.length!==1?"s":""}</div></div>
+<div class="stat"><div class="label">Gastos</div><div class="value red">${fmt(totalExp)}</div><div class="sub">${mExp.length} gasto${mExp.length!==1?"s":""}</div></div>
+<div class="stat"><div class="label">Saldo</div><div class="value ${saldo>=0?"green":"red"}">${saldo>=0?"+":""}${fmt(saldo)}</div><div class="sub">${totalInc>0?Math.round((totalExp/totalInc)*100):0}% comprometido</div></div>
+</div>
+<div class="grid">
+<div class="stat"><div class="label">Fixos</div><div class="value">${fmt(fixedT)}</div></div>
+<div class="stat"><div class="label">Variáveis</div><div class="value">${fmt(varT)}</div></div>
+<div class="stat"><div class="label">Pendente</div><div class="value" style="color:#f59e0b">${fmt(pendT)}</div></div>
+</div>
+</div>
+${Object.keys(byCat).length>0?`<div class="section">
+<h3>📊 Gastos por Categoria</h3>
+${Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>`<div class="cat-row"><span class="cat-name">${cat}</span><span class="cat-val">${fmt(val)} <span style="color:#aaa;font-weight:400;font-size:12px">(${totalExp>0?Math.round((val/totalExp)*100):0}%)</span></span></div>`).join("")}
+</div>`:""}
+${Object.keys(byCard).length>0?`<div class="section">
+<h3>💳 Por Forma de Pagamento</h3>
+${Object.entries(byCard).sort((a,b)=>b[1]-a[1]).map(([card,val])=>`<div class="cat-row"><span class="cat-name">${card}</span><span class="cat-val">${fmt(val)}</span></div>`).join("")}
+</div>`:""}
+${mInc.length>0?`<div class="section">
+<h3>📥 Receitas</h3>
+<table><thead><tr><th>Descrição</th><th>Categoria</th><th>Data</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+${mInc.sort((a,b)=>a.date.localeCompare(b.date)).map(i=>`<tr><td>${i.desc}</td><td><span class="tag tag-green">${i.category}</span></td><td>${new Date(i.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td><td style="text-align:right;font-weight:600;color:#22c55e">${fmt(i.amount)}</td></tr>`).join("")}
+</tbody></table></div>`:""}
+${mExp.length>0?`<div class="section">
+<h3>📤 Gastos</h3>
+<table><thead><tr><th>Descrição</th><th>Tipo</th><th>Cartão</th><th>Cat.</th><th>Data</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+${mExp.sort((a,b)=>a.date.localeCompare(b.date)).map(e=>`<tr><td>${e.desc}</td><td><span class="tag ${e.type==="fixo"?"tag-blue":"tag-gray"}">${e.type==="fixo"?"Fixo":"Var."}</span></td><td>${e.card||"—"}</td><td><span class="tag tag-gray">${e.category}</span></td><td>${new Date(e.date+"T12:00").toLocaleDateString(c.locale||"pt-BR")}</td><td style="text-align:right;font-weight:600">${fmt(e.amount)}</td></tr>`).join("")}
+</tbody></table></div>`:""}
+${trips.length>0?`<div class="section">
+<h3>🛒 Compras do Mês</h3>
+${trips.map(t=>`<div style="margin-bottom:12px;padding:12px;background:#f8f6f3;border-radius:8px">
+<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${new Date(t.date+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"long"})}</span><strong>${fmt(t.total)}</strong></div>
+<div style="font-size:12px;color:#666">${t.items.map(i=>i.name).join(", ")}</div>
+</div>`).join("")}
+</div>`:""}
+${habits.length>0?`<div class="section">
+<h3>🔁 Hábitos do Mês</h3>
+<table><thead><tr><th>Hábito</th><th style="text-align:center">Dias Feitos</th><th style="text-align:center">Taxa</th></tr></thead><tbody>
+${habits.map(h=>{const daysInMonth=new Date(Number(month.split("-")[0]),Number(month.split("-")[1]),0).getDate();const done=logs.filter(l=>l.habitId===h.id).length;const pct=Math.round((done/daysInMonth)*100);return`<tr><td>${h.icon} ${h.name}</td><td style="text-align:center">${done}/${daysInMonth}</td><td style="text-align:center"><span class="tag ${pct>=80?"tag-green":pct>=50?"tag-blue":"tag-red"}">${pct}%</span></td></tr>`;}).join("")}
+</tbody></table></div>`:""}
+<div class="footer">Gerado pelo Stockly — ${c.houseName} — ${new Date().toLocaleDateString(c.locale||"pt-BR")}</div>
+</body></html>`;
+// Open in new window for printing/saving as PDF
+const w=window.open("","_blank");
+if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);}
+setGenerating(false);
+},300);};
+const allMonths=()=>{const months=new Set();(data.expenses||[]).forEach(e=>{if(e.date)months.add(e.date.slice(0,7));});(data.incomes||[]).forEach(i=>{if(i.date)months.add(i.date.slice(0,7));});months.add(new Date().toISOString().slice(0,7));return[...months].sort().reverse();};
+return(<div className="card"><div className="sst">📄 Relatório Mensal (PDF)</div>
+<p style={{fontSize:13,color:"var(--text2)",marginBottom:16,lineHeight:1.6}}>Gere um relatório completo do mês com finanças, compras, hábitos e mais. Abre em uma nova aba pronta para salvar como PDF ou imprimir.</p>
+<div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+<select value={month} onChange={e=>setMonth(e.target.value)} style={{flex:1,minWidth:160,textTransform:"capitalize"}}>{allMonths().map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}</select>
+<button className="btn bp" onClick={generate} disabled={generating} style={{opacity:generating?.6:1}}>{generating?"Gerando...":"📄 Gerar Relatório"}</button>
+</div></div>);
+}
+
+// ─── RECEIPT SCANNER ───
+function ReceiptScanner({data,setData,toast,c}){
+const[scanning,setScanning]=useState(false);
+const[scanResult,setScanResult]=useState(null);
+const[items,setItems]=useState([]);
+const[processing,setProcessing]=useState(false);
+const fileRef=useRef(null);
+const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
+const handleFile=(e)=>{
+const file=e.target.files?.[0];if(!file)return;
+setProcessing(true);setScanResult(null);setItems([]);
+const reader=new FileReader();
+reader.onload=async(ev)=>{
+try{
+// Load Tesseract.js from CDN
+if(!window.Tesseract){
+const script=document.createElement("script");
+script.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+document.head.appendChild(script);
+await new Promise((res,rej)=>{script.onload=res;script.onerror=rej;setTimeout(rej,15000);});
+}
+const{data:{text}}=await window.Tesseract.recognize(ev.target.result,"por",{logger:m=>{}});
+setScanResult(text);
+// Parse items from text
+const lines=text.split("\n").map(l=>l.trim()).filter(l=>l.length>3);
+const parsed=[];
+for(const line of lines){
+// Try to find price pattern: number with comma/dot at end
+const priceMatch=line.match(/(\d+[.,]\d{2})\s*$/);
+if(priceMatch){
+const price=Number(priceMatch[1].replace(",","."));
+const name=line.slice(0,line.lastIndexOf(priceMatch[1])).replace(/[\d.,]+\s*(un|kg|cx|pc|lt|ml|g)\b/gi,"").replace(/\s+/g," ").trim();
+if(name.length>1&&price>0&&price<10000){
+parsed.push({id:Date.now()+Math.random(),name:name.slice(0,50),price,qty:1,unit:"un",category:"Mercado",include:true});
+}}}
+setItems(parsed);
+setProcessing(false);setScanning(true);
+}catch(err){
+console.error("OCR error:",err);
+toast("Erro ao processar imagem. Tente outra foto.");
+setProcessing(false);
+}};
+reader.readAsDataURL(file);
+};
+const updateItem=(id,field,val)=>{setItems(its=>its.map(i=>i.id===id?{...i,[field]:val}:i));};
+const toggleItem=(id)=>{setItems(its=>its.map(i=>i.id===id?{...i,include:!i.include}:i));};
+const addManual=()=>{setItems(its=>[...its,{id:Date.now(),name:"",price:0,qty:1,unit:"un",category:"Mercado",include:true}]);};
+const removeItem=(id)=>{setItems(its=>its.filter(i=>i.id!==id));};
+const saveItems=()=>{
+const toSave=items.filter(i=>i.include&&i.name.trim());
+if(toSave.length===0){toast("Nenhum item para salvar");return;}
+setData(d=>{
+const newGrocery=[...d.grocery,...toSave.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:Number(i.qty)||1,unit:i.unit||"un",checked:true,category:i.category||"Mercado",price:Number(i.price)||0,unitPrice:Number(i.price)||0}))];
+const newPH=[...(d.priceHistory||[]),...toSave.filter(i=>i.price>0).map(i=>({id:Date.now()+Math.random(),name:i.name,unitPrice:i.price,totalPrice:i.price,qty:i.qty||1,unit:i.unit||"un",date:new Date().toISOString().slice(0,10)}))];
+return{...d,grocery:newGrocery,priceHistory:newPH};
+});
+toast(`${toSave.length} ite${toSave.length>1?"ns":"m"} adicionado${toSave.length>1?"s":""}`);
+setScanning(false);setItems([]);setScanResult(null);
+};
+const total=items.filter(i=>i.include).reduce((a,i)=>a+(Number(i.price)||0),0);
+return(<>
+<div className="card">
+<div className="ct">📷 Scanner de Nota Fiscal</div>
+<p style={{fontSize:13,color:"var(--text2)",marginBottom:16,lineHeight:1.6}}>Tire uma foto da nota fiscal e o app extrai os itens e preços automaticamente. Revise antes de salvar.</p>
+<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+<button className="btn bp" onClick={()=>fileRef.current?.click()} disabled={processing}>{processing?"⏳ Processando...":"📷 Escanear Nota"}</button>
+<input ref={fileRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleFile}/>
+</div>
+{processing&&<div style={{marginTop:16,textAlign:"center"}}><div style={{fontSize:13,color:"var(--text3)",marginBottom:8}}>Lendo nota fiscal...</div><div className="splash-dots" style={{justifyContent:"center",display:"flex",gap:6}}><span style={{width:6,height:6,borderRadius:"50%",background:"var(--accent)",animation:"dotBounce 1.2s ease-in-out infinite"}}/><span style={{width:6,height:6,borderRadius:"50%",background:"var(--accent)",animation:"dotBounce 1.2s ease-in-out infinite .15s"}}/><span style={{width:6,height:6,borderRadius:"50%",background:"var(--accent)",animation:"dotBounce 1.2s ease-in-out infinite .3s"}}/></div></div>}
+</div>
+{scanning&&<Modal title={`📷 Itens Encontrados (${items.filter(i=>i.include).length})`} onClose={()=>{setScanning(false);setItems([]);}}>
+{items.length===0&&<div style={{textAlign:"center",padding:20,color:"var(--text3)"}}>Nenhum item identificado. Tente outra foto ou adicione manualmente.</div>}
+<div style={{maxHeight:"55vh",overflowY:"auto"}}>
+{items.map((item,idx)=>(<div key={item.id} style={{display:"flex",gap:8,alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--border)",opacity:item.include?1:.4}}>
+<div style={{width:22,height:22,borderRadius:5,border:`2px solid ${item.include?"var(--green)":"var(--border2)"}`,background:item.include?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}} onClick={()=>toggleItem(item.id)}>{item.include&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={12} color="#fff"/>}</div>
+<input value={item.name} onChange={e=>updateItem(item.id,"name",e.target.value)} placeholder="Nome do item" style={{flex:2,padding:"6px 8px",fontSize:13}}/>
+<input type="number" step="0.01" value={item.price||""} onChange={e=>updateItem(item.id,"price",Number(e.target.value)||0)} placeholder="Preço" style={{width:80,padding:"6px 8px",fontSize:13,textAlign:"right"}}/>
+<button style={{background:"none",border:"none",color:"var(--text3)",cursor:"pointer",padding:4,flexShrink:0}} onClick={()=>removeItem(item.id)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button>
+</div>))}
+</div>
+<button className="btn bg bs" onClick={addManual} style={{marginTop:8}}>+ Adicionar item manualmente</button>
+{items.filter(i=>i.include).length>0&&<div style={{marginTop:12,padding:"12px 16px",background:"var(--accent-glow)",borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:14,fontWeight:600}}>Total: {fmt(total)}</span><span style={{fontSize:12,color:"var(--text3)"}}>{items.filter(i=>i.include).length} ite{items.filter(i=>i.include).length>1?"ns":"m"}</span></div>}
+{scanResult&&<details style={{marginTop:12}}><summary style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}}>Ver texto bruto detectado</summary><pre style={{fontSize:10,color:"var(--text3)",marginTop:8,padding:8,background:"var(--bg4)",borderRadius:6,maxHeight:120,overflow:"auto",whiteSpace:"pre-wrap"}}>{scanResult}</pre></details>}
+<div className="ma"><button className="btn bg" onClick={()=>{setScanning(false);setItems([]);}}>Cancelar</button><button className="btn bp" onClick={saveItems}>Salvar {items.filter(i=>i.include).length} ite{items.filter(i=>i.include).length>1?"ns":"m"}</button></div>
+</Modal>}
+</>);
+}
 
 // ─── WELCOME TOUR ───
 const TOUR_STEPS=[
@@ -1509,5 +1717,5 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast} user={user} mode={mode} houseInfo={houseInfo}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
 {page==="help"&&<HelpPage goTo={go}/>}
-{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs} mode={mode} toggleMode={toggleMode}/>}
+{page==="settings"&&<SettingsPage data={data} setData={setData} toast={toast} user={user} houseCode={houseCode} houseInfo={houseInfo} leaveHouse={leaveHouse} refreshHouseInfo={refreshHouseInfo} userPrefs={userPrefs} setUserPrefs={setUserPrefs} mode={mode} toggleMode={toggleMode}/>}
 </main></div>{page==="dashboard"&&<FAB goTo={go} setData={setData} toast={toast} data={data}/>}{showTour&&<WelcomeTour onFinish={finishTour}/>}<InstallBanner installHook={installHook}/><Toast message={tm} onUndo={undoRef.current?doUndo:null}/></>);}
