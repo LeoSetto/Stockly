@@ -24,6 +24,8 @@ const DEFAULT_CONFIG = {
   mealTypes: ["Café", "Almoço", "Lanche", "Jantar"],
   expiryWarnDays: 7,
   variableWeightCategories: ["Hortifruti"],
+  habitCategories: ["Saúde", "Produtividade", "Bem-estar", "Fitness"],
+  todoLists: ["Pessoal", "Trabalho", "Casa"],
 };
 
 const DEFAULT_DATA = {
@@ -53,11 +55,15 @@ const DEFAULT_DATA = {
   budgetByCategory: {},
   priceHistory: [],
   shoppingTrips: [],
-  _version: 7,
+  habits: [],
+  habitLogs: [],
+  todos: [],
+  events: [],
+  _version: 8,
 };
 
 // ─── Data migration — upgrades old data to new format ───
-const DATA_VERSION = 7;
+const DATA_VERSION = 8;
 const migrateData = (d) => {
   if (!d) return d;
   const v = d._version || 1;
@@ -82,16 +88,17 @@ const migrateData = (d) => {
   }
   if (!m.incomes) m.incomes = [];
   if (!m.budgetByCategory) m.budgetByCategory = {};
-  // v6→v7: Add recurrence, installment, and split fields to expenses
   m.expenses = (m.expenses || []).map(e => ({
-    ...e,
-    recurrence: e.recurrence || "",
-    installments: e.installments || 0,
-    currentInstallment: e.currentInstallment || 0,
-    splitTotal: e.splitTotal || 0,
-    splitMyShare: e.splitMyShare || 0,
-    splitPayers: e.splitPayers || [],
+    ...e, recurrence: e.recurrence || "", installments: e.installments || 0,
+    currentInstallment: e.currentInstallment || 0, splitTotal: e.splitTotal || 0,
+    splitMyShare: e.splitMyShare || 0, splitPayers: e.splitPayers || [],
   }));
+  if (!m.habits) m.habits = [];
+  if (!m.habitLogs) m.habitLogs = [];
+  if (!m.todos) m.todos = [];
+  if (!m.events) m.events = [];
+  if (!m.config.habitCategories) m.config.habitCategories = ["Saúde", "Produtividade", "Bem-estar", "Fitness"];
+  if (!m.config.todoLists) m.config.todoLists = ["Pessoal", "Trabalho", "Casa"];
   m._version = DATA_VERSION;
   return m;
 };
@@ -144,6 +151,7 @@ const I = {
   sliders:<Icon d={<><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></>}/>,
   prices:<Icon d={<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>}/>,
   help:<Icon d={<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></>}/>,
+  routine:<Icon d={<><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></>}/>,
 };
 
 // ─── CSS ───
@@ -875,6 +883,229 @@ return(<Modal title={modal==="add"?"Novo Gasto":"Editar Gasto"} onClose={()=>set
 {eb&&<Modal title="Editar Orçamento" onClose={()=>setEb(false)}><div className="fg"><label className="fl">Orçamento Mensal</label><input type="number" value={bv} onChange={e=>setBv(e.target.value)} autoFocus/></div><div className="ma"><button className="btn bg" onClick={()=>setEb(false)}>Cancelar</button><button className="btn bp" onClick={sb}>Salvar</button></div></Modal>}
 </div>);}
 
+// ─── ROUTINE PAGE ───
+function RoutinePage({data,setData,toast,user,mode}){
+const c=data.config;const habits=data.habits||[];const todos=data.todos||[];const events=data.events||[];
+const[tab,setTab]=useState("hoje");const[modal,setModal]=useState(null);const[form,setForm]=useState({});
+const shared=mode==="shared";const myName=user?.displayName||user?.email?.split("@")[0]||"Eu";
+const td=today();const dayNames=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+const getDayName=(d)=>dayNames[new Date(d+"T12:00").getDay()];
+const habitCats=c.habitCategories||["Saúde","Produtividade","Bem-estar","Fitness"];
+// ─── HABITS LOGIC ───
+const isHabitDue=(h)=>{const dow=new Date(td+"T12:00").getDay();if(h.freq==="diario")return true;if(h.freq==="dias"&&h.freqDays)return h.freqDays.includes(dow);if(h.freq==="semanal")return true;return true;};
+const getLog=(hid,date)=>(h=> h?h:null)((data.habitLogs||[]).find(l=>l.habitId===hid&&l.date===date));
+const toggleHabit=(hid,date)=>{const existing=getLog(hid,date);const stamp=editStamp(user);if(existing){setData(d=>({...d,habitLogs:(d.habitLogs||[]).filter(l=>!(l.habitId===hid&&l.date===date))}));}else{setData(d=>({...d,habitLogs:[...(d.habitLogs||[]),{habitId:hid,date,done:true,ts:Date.now(),...stamp}]}));toast("✓ Hábito feito!");}};
+const setHabitVal=(hid,date,val,note)=>{const stamp=editStamp(user);setData(d=>{const logs=(d.habitLogs||[]).filter(l=>!(l.habitId===hid&&l.date===date));logs.push({habitId:hid,date,done:true,value:Number(val)||0,note:note||"",ts:Date.now(),...stamp});return{...d,habitLogs:logs};});};
+const getStreak=(hid)=>{let s=0;let d=new Date(td+"T12:00");while(true){const ds=d.toISOString().slice(0,10);if(getLog(hid,ds))s++;else break;d.setDate(d.getDate()-1);if(s>365)break;}return s;};
+const getBestStreak=(hid)=>{const logs=(data.habitLogs||[]).filter(l=>l.habitId===hid).map(l=>l.date).sort();let best=0,cur=0,prev="";for(const d of logs){if(prev){const diff=Math.round((new Date(d+"T12:00")-new Date(prev+"T12:00"))/86400000);cur=diff===1?cur+1:1;}else cur=1;if(cur>best)best=cur;prev=d;}return best;};
+const saveHabit=()=>{if(!form.name)return;const stamp=editStamp(user);const base={name:form.name,icon:form.icon||"⭐",category:form.category||habitCats[0],type:form.type||"check",target:Number(form.target)||1,unit:form.unit||"",freq:form.freq||"diario",freqDays:form.freqDays||[],period:form.period||"anytime",...stamp};if(modal==="addHabit"){setData(d=>({...d,habits:[...(d.habits||[]),{...base,id:Date.now()}]}));toast("Hábito criado");}else{setData(d=>({...d,habits:(d.habits||[]).map(h=>h.id===form.id?{...base,id:form.id}:h)}));toast("Hábito atualizado");}setModal(null);};
+const delHabit=(id)=>{setData(d=>({...d,habits:(d.habits||[]).filter(h=>h.id!==id),habitLogs:(d.habitLogs||[]).filter(l=>l.habitId!==id)}));toast("Hábito removido");};
+// ─── TODOS LOGIC ───
+const todoPriorities=[{v:"alta",l:"Alta",c:"var(--red)"},{v:"media",l:"Média",c:"var(--yellow)"},{v:"baixa",l:"Baixa",c:"var(--blue)"},{v:"",l:"Nenhuma",c:"var(--text3)"}];
+const todoLists=c.todoLists||["Pessoal","Trabalho","Casa"];
+const saveTodo=()=>{if(!form.name)return;const stamp=editStamp(user);const base={name:form.name,desc:form.desc||"",due:form.due||"",priority:form.priority||"",list:form.list||todoLists[0],done:form.done||false,assignee:form.assignee||"",subtasks:form.subtasks||[],recurrence:form.recurrence||"",...stamp};if(modal==="addTodo"){setData(d=>({...d,todos:[...(d.todos||[]),{...base,id:Date.now()}]}));toast("Tarefa criada");}else{setData(d=>({...d,todos:(d.todos||[]).map(t=>t.id===form.id?{...base,id:form.id}:t)}));toast("Tarefa atualizada");}setModal(null);};
+const toggleTodo=(id)=>{const stamp=editStamp(user);setData(d=>({...d,todos:(d.todos||[]).map(t=>t.id===id?{...t,done:!t.done,...stamp}:t)}));};
+const toggleSubtask=(todoId,stIdx)=>{setData(d=>({...d,todos:(d.todos||[]).map(t=>t.id===todoId?{...t,subtasks:(t.subtasks||[]).map((s,i)=>i===stIdx?{...s,done:!s.done}:s)}:t)}));};
+const delTodo=(id)=>{setData(d=>({...d,todos:(d.todos||[]).filter(t=>t.id!==id)}));toast("Tarefa removida");};
+// ─── EVENTS/AGENDA LOGIC ───
+const saveEvent=()=>{if(!form.title)return;const stamp=editStamp(user);const base={title:form.title,date:form.date||td,time:form.time||"",endTime:form.endTime||"",color:form.color||"var(--accent)",notes:form.notes||"",allDay:form.allDay||false,...stamp};if(modal==="addEvent"){setData(d=>({...d,events:[...(d.events||[]),{...base,id:Date.now()}]}));toast("Evento adicionado");}else{setData(d=>({...d,events:(d.events||[]).map(e=>e.id===form.id?{...base,id:form.id}:e)}));toast("Evento atualizado");}setModal(null);};
+const delEvent=(id)=>{setData(d=>({...d,events:(d.events||[]).filter(e=>e.id!==id)}));toast("Evento removido");};
+// ─── COMPUTED ───
+const todayHabits=habits.filter(isHabitDue);
+const doneToday=todayHabits.filter(h=>getLog(h.id,td)).length;
+const todayTodos=todos.filter(t=>!t.done&&(!t.due||t.due<=td));
+const upcomingTodos=todos.filter(t=>!t.done&&t.due&&t.due>td).sort((a,b)=>a.due.localeCompare(b.due));
+const doneTodos=todos.filter(t=>t.done);
+const todayEvents=events.filter(e=>e.date===td).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+const weekEvents=events.filter(e=>{const diff=Math.round((new Date(e.date+"T12:00")-new Date(td+"T12:00"))/86400000);return diff>=0&&diff<7;}).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||"").localeCompare(b.time||""));
+// Week dates for heatmap
+const getWeekDates=()=>{const dates=[];const d=new Date(td+"T12:00");const dow=d.getDay();d.setDate(d.getDate()-dow);for(let i=0;i<7;i++){dates.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);}return dates;};
+const weekDates=getWeekDates();
+const pctToday=todayHabits.length>0?Math.round((doneToday/todayHabits.length)*100):0;
+// Subtask helpers
+const[newST,setNewST]=useState("");
+const addSubtask=()=>{const n=newST.trim();if(!n)return;setForm({...form,subtasks:[...(form.subtasks||[]),{name:n,done:false}]});setNewST("");};
+const rmSubtask=(i)=>{setForm({...form,subtasks:(form.subtasks||[]).filter((_,idx)=>idx!==i)});};
+// Event colors
+const evColors=["var(--accent)","var(--blue)","var(--green)","var(--red)","var(--purple)","var(--yellow)"];
+// ─── RENDER ───
+const tabs=[{id:"hoje",l:"Hoje"},{id:"habitos",l:"Hábitos"},{id:"tarefas",l:"Tarefas"},{id:"agenda",l:"Agenda"}];
+return(<div>
+<div className="ph"><div className="pt">Rotina</div><div className="ps">{new Date(td+"T12:00").toLocaleDateString(c.locale||"pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div></div>
+{/* Tabs */}
+<div className="filter-scroll" style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>{tabs.map(t=><button key={t.id} className={`btn ${tab===t.id?"bp":"bg"} bs`} onClick={()=>setTab(t.id)}>{t.l}</button>)}</div>
+
+{/* ═══ HOJE ═══ */}
+{tab==="hoje"&&<>
+{/* Progress ring */}
+<div className="card" style={{textAlign:"center",padding:20}}>
+<div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",position:"relative",width:90,height:90,marginBottom:12}}>
+<svg width="90" height="90" viewBox="0 0 90 90" style={{transform:"rotate(-90deg)"}}><circle cx="45" cy="45" r="38" fill="none" stroke="var(--bg4)" strokeWidth="7"/><circle cx="45" cy="45" r="38" fill="none" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round" strokeDasharray={`${pctToday*2.39} 239`} style={{transition:"stroke-dasharray .6s cubic-bezier(.4,0,.2,1)"}}/></svg>
+<div style={{position:"absolute",fontSize:22,fontWeight:800,color:"var(--text)"}}>{pctToday}%</div>
+</div>
+<div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>{doneToday}/{todayHabits.length} hábitos</div>
+<div style={{fontSize:12,color:"var(--text3)",marginTop:4}}>{todayTodos.length} tarefa{todayTodos.length!==1?"s":""} pendente{todayTodos.length!==1?"s":""} · {todayEvents.length} evento{todayEvents.length!==1?"s":""}</div>
+</div>
+{/* Today habits */}
+{todayHabits.length>0&&<div className="card"><div className="ct">🔥 Hábitos de Hoje</div>
+{["manha","tarde","noite","anytime"].map(period=>{const ph=todayHabits.filter(h=>(h.period||"anytime")===period);if(ph.length===0)return null;const pLabel={manha:"☀️ Manhã",tarde:"🌤 Tarde",noite:"🌙 Noite",anytime:""}[period];return(<div key={period}>{pLabel&&<div style={{fontSize:11,fontWeight:700,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1.5,marginBottom:8,marginTop:period!=="manha"?12:0}}>{pLabel}</div>}
+{ph.map(h=>{const log=getLog(h.id,td);const streak=getStreak(h.id);const done=!!log;return(<div key={h.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+<div style={{width:36,height:36,borderRadius:10,background:done?"var(--green-bg)":"var(--bg4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,cursor:"pointer",transition:"all .2s",border:done?"2px solid var(--green)":"2px solid transparent"}} onClick={()=>{if(h.type==="check")toggleHabit(h.id,td);else setModal("logHabit");setForm({...h,logDate:td,logVal:log?.value||"",logNote:log?.note||""});}}>{h.icon||"⭐"}</div>
+<div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:done?"var(--green)":"var(--text)",textDecoration:done?"line-through":"none",transition:"all .2s"}}>{h.name}</div>
+{h.type!=="check"&&<div style={{fontSize:11,color:"var(--text3)"}}>{log?.value||0}/{h.target} {h.unit}</div>}
+</div>
+{streak>0&&<span style={{fontSize:11,color:"var(--accent)",fontWeight:700}}>🔥{streak}</span>}
+{done&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={18} color="var(--green)"/>}
+</div>);})}</div>);})}
+</div>}
+{/* Today events */}
+{todayEvents.length>0&&<div className="card"><div className="ct">📅 Agenda de Hoje</div>
+{todayEvents.map(ev=>(<div key={ev.id} style={{display:"flex",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)",alignItems:"center"}} onClick={()=>{setForm({...ev});setModal("editEvent");}}>
+<div style={{width:4,height:36,borderRadius:2,background:ev.color||"var(--accent)",flexShrink:0}}/>
+<div style={{flex:1}}><div style={{fontSize:14,fontWeight:600}}>{ev.title}</div><div style={{fontSize:11,color:"var(--text3)"}}>{ev.allDay?"Dia inteiro":ev.time?`${ev.time}${ev.endTime?" — "+ev.endTime:""}`:""}</div></div>
+</div>))}
+</div>}
+{/* Today tasks */}
+{todayTodos.length>0&&<div className="card"><div className="ct">✅ Tarefas para Hoje</div>
+{todayTodos.slice(0,5).map(t=>{const pc=todoPriorities.find(p=>p.v===t.priority)||todoPriorities[3];return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${pc.c}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .25s"}} onClick={()=>toggleTodo(t.id)}>{t.done&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color={pc.c}/>}</div>
+<div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>{t.name}</div>{t.due&&<div style={{fontSize:11,color:"var(--text3)"}}>{new Date(t.due+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</div>}</div>
+<span className="tg tg-n">{t.list}</span>
+</div>);})}
+{todayTodos.length>5&&<div style={{fontSize:12,color:"var(--accent)",marginTop:8,cursor:"pointer"}} onClick={()=>setTab("tarefas")}>+ {todayTodos.length-5} mais →</div>}
+</div>}
+{todayHabits.length===0&&todayTodos.length===0&&todayEvents.length===0&&<div className="card" style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhuma rotina configurada ainda. Comece criando hábitos, tarefas ou eventos!</div>}
+</>}
+
+{/* ═══ HÁBITOS ═══ */}
+{tab==="habitos"&&<>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",icon:"⭐",category:habitCats[0],type:"check",target:1,unit:"",freq:"diario",freqDays:[],period:"anytime"});setModal("addHabit");}}>{I.plus} Novo Hábito</button></div>
+{/* Week heatmap */}
+{habits.length>0&&<div className="card"><div className="ct">📊 Semana</div>
+<div style={{overflowX:"auto"}}><table style={{display:"table"}}><thead><tr><th style={{minWidth:120}}>Hábito</th>{weekDates.map(d=><th key={d} style={{textAlign:"center",minWidth:36,padding:"6px 2px"}}><div style={{fontSize:10}}>{getDayName(d)}</div><div style={{fontSize:9,color:"var(--text3)"}}>{d.slice(8)}</div></th>)}<th style={{textAlign:"center",minWidth:40}}>🔥</th></tr></thead><tbody>
+{habits.map(h=>(<tr key={h.id}><td style={{fontSize:13,fontWeight:500}}><span style={{marginRight:6}}>{h.icon}</span>{h.name}</td>
+{weekDates.map(d=>{const log=getLog(h.id,d);const done=!!log;const isToday=d===td;return(<td key={d} style={{textAlign:"center",padding:4}}><div style={{width:28,height:28,borderRadius:8,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",cursor:isToday?"pointer":"default",transition:"all .2s",background:done?"var(--green)":isToday?"var(--bg4)":"transparent",border:isToday&&!done?"2px dashed var(--border2)":"2px solid transparent",color:done?"#fff":"var(--text3)",fontSize:12,fontWeight:700}} onClick={()=>{if(isToday&&h.type==="check")toggleHabit(h.id,d);}}>{done?"✓":""}</div></td>);})}
+<td style={{textAlign:"center",fontWeight:700,color:"var(--accent)",fontSize:14}}>{getStreak(h.id)}</td></tr>))}
+</tbody></table></div></div>}
+{/* Habit list */}
+{habits.length===0?<div className="card" style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhum hábito criado. Comece agora!</div>:
+<div style={{display:"flex",flexDirection:"column",gap:8}}>
+{habits.map(h=>{const streak=getStreak(h.id);const best=getBestStreak(h.id);const log=getLog(h.id,td);return(<div className="card" key={h.id} style={{padding:14,marginBottom:0}}>
+<div style={{display:"flex",alignItems:"center",gap:10}}>
+<span style={{fontSize:24}}>{h.icon}</span>
+<div style={{flex:1}}><div style={{fontSize:15,fontWeight:700}}>{h.name}</div><div style={{fontSize:11,color:"var(--text3)"}}>{h.category} · {h.period==="manha"?"☀️ Manhã":h.period==="tarde"?"🌤 Tarde":h.period==="noite"?"🌙 Noite":"Qualquer hora"} · {h.freq==="diario"?"Diário":h.freq==="dias"?"Dias específicos":"Semanal"}</div></div>
+<div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:"var(--accent)"}}>🔥 {streak}</div><div style={{fontSize:10,color:"var(--text3)"}}>melhor: {best}</div></div>
+</div>
+<div style={{display:"flex",gap:6,marginTop:8,justifyContent:"flex-end"}}><button className="bi" onClick={()=>{setForm({...h});setModal("editHabit");}}>{I.edit}</button><ConfirmDelete onConfirm={()=>delHabit(h.id)}/></div>
+</div>);})}
+</div>}
+</>}
+
+{/* ═══ TAREFAS ═══ */}
+{tab==="tarefas"&&<>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",desc:"",due:"",priority:"",list:todoLists[0],assignee:"",subtasks:[],recurrence:""});setModal("addTodo");}}>{I.plus} Nova Tarefa</button></div>
+{/* Pending */}
+{todayTodos.length>0&&<div className="card"><div className="ct" style={{color:"var(--accent)"}}>📌 Hoje e Atrasadas ({todayTodos.length})</div>
+{todayTodos.map(t=>{const pc=todoPriorities.find(p=>p.v===t.priority)||todoPriorities[3];const stDone=(t.subtasks||[]).filter(s=>s.done).length;const stTotal=(t.subtasks||[]).length;return(<div key={t.id} style={{padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+<div style={{display:"flex",alignItems:"center",gap:10}}>
+<div style={{width:24,height:24,borderRadius:7,border:`2px solid ${pc.c}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .25s",flexShrink:0}} onClick={()=>toggleTodo(t.id)}>{t.done&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color={pc.c}/>}</div>
+<div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,textDecoration:t.done?"line-through":"",color:t.done?"var(--text3)":"var(--text)"}}>{t.name}</div>
+{t.desc&&<div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{t.desc}</div>}
+<div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap",alignItems:"center"}}><span className="tg tg-n">{t.list}</span>{t.due&&<span style={{fontSize:11,color:t.due<td?"var(--red)":"var(--text3)"}}>{new Date(t.due+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span>}{t.assignee&&<span style={{fontSize:11,color:"var(--text3)"}}>→ {t.assignee}</span>}{stTotal>0&&<span style={{fontSize:11,color:"var(--text3)"}}>{stDone}/{stTotal}</span>}</div>
+</div>
+<div style={{display:"flex",gap:4,flexShrink:0}}><button className="bi" onClick={()=>{setForm({...t});setModal("editTodo");}}>{I.edit}</button><ConfirmDelete onConfirm={()=>delTodo(t.id)}/></div>
+</div>
+{stTotal>0&&<div style={{marginLeft:34,marginTop:6}}>{(t.subtasks||[]).map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"3px 0",fontSize:12,color:s.done?"var(--text3)":"var(--text2)",cursor:"pointer"}} onClick={()=>toggleSubtask(t.id,i)}><div style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${s.done?"var(--green)":"var(--border2)"}`,background:s.done?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{s.done&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={10} color="#fff"/>}</div><span style={{textDecoration:s.done?"line-through":""}}>{s.name}</span></div>))}</div>}
+</div>);})}
+</div>}
+{/* Upcoming */}
+{upcomingTodos.length>0&&<div className="card"><div className="ct">📅 Próximas ({upcomingTodos.length})</div>
+{upcomingTodos.slice(0,8).map(t=>{const pc=todoPriorities.find(p=>p.v===t.priority)||todoPriorities[3];return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
+<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${pc.c}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>toggleTodo(t.id)}/>
+<div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>{t.name}</div></div>
+<span style={{fontSize:11,color:"var(--text3)"}}>{new Date(t.due+"T12:00").toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"})}</span>
+<span className="tg tg-n">{t.list}</span>
+</div>);})}
+</div>}
+{/* Done */}
+{doneTodos.length>0&&<div className="card"><div className="ct" style={{color:"var(--green)"}}>✅ Concluídas ({doneTodos.length})</div>
+{doneTodos.slice(0,5).map(t=>(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:"1px solid var(--border)",opacity:.5}}>
+<Icon d={<polyline points="20 6 9 17 4 12"/>} size={16} color="var(--green)"/>
+<span style={{flex:1,fontSize:13,textDecoration:"line-through",color:"var(--text3)"}}>{t.name}</span>
+<ConfirmDelete onConfirm={()=>delTodo(t.id)}/>
+</div>))}
+</div>}
+{todos.length===0&&<div className="card" style={{textAlign:"center",padding:32,color:"var(--text3)"}}>Nenhuma tarefa. Crie a primeira!</div>}
+</>}
+
+{/* ═══ AGENDA ═══ */}
+{tab==="agenda"&&<>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({title:"",date:td,time:"",endTime:"",color:"var(--accent)",notes:"",allDay:false});setModal("addEvent");}}>{I.plus} Novo Evento</button></div>
+{/* Week view */}
+<div style={{display:"flex",flexDirection:"column",gap:8}}>
+{weekDates.map(d=>{const dayEvs=events.filter(e=>e.date===d).sort((a,b)=>(a.time||"").localeCompare(b.time||""));const isToday=d===td;const dayLabel=new Date(d+"T12:00").toLocaleDateString(c.locale||"pt-BR",{weekday:"short",day:"numeric",month:"short"});return(<div key={d} className="card" style={{padding:12,marginBottom:0,borderLeft:isToday?`3px solid var(--accent)`:"3px solid transparent"}}>
+<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:dayEvs.length>0?8:0}}><div style={{fontSize:13,fontWeight:isToday?700:500,color:isToday?"var(--accent)":"var(--text)"}}>{dayLabel}</div>{isToday&&<span className="tg tg-b">Hoje</span>}</div>
+{dayEvs.length===0&&<div style={{fontSize:12,color:"var(--text3)",padding:"2px 0"}}>Sem eventos</div>}
+{dayEvs.map(ev=>(<div key={ev.id} style={{display:"flex",gap:8,alignItems:"center",padding:"6px 0",borderBottom:"1px solid var(--border)",cursor:"pointer"}} onClick={()=>{setForm({...ev});setModal("editEvent");}}>
+<div style={{width:4,height:28,borderRadius:2,background:ev.color||"var(--accent)",flexShrink:0}}/>
+<div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{ev.title}</div>{!ev.allDay&&ev.time&&<div style={{fontSize:11,color:"var(--text3)"}}>{ev.time}{ev.endTime?" — "+ev.endTime:""}</div>}{ev.allDay&&<div style={{fontSize:11,color:"var(--text3)"}}>Dia inteiro</div>}</div>
+<div style={{display:"flex",gap:4}}><button className="bi" style={{padding:4}} onClick={e=>{e.stopPropagation();setForm({...ev});setModal("editEvent");}}>{I.edit}</button><ConfirmDelete onConfirm={()=>delEvent(ev.id)}/></div>
+</div>))}
+</div>);})}
+</div>
+</>}
+
+{/* ═══ MODALS ═══ */}
+{/* Habit modal */}
+{(modal==="addHabit"||modal==="editHabit")&&<Modal title={modal==="addHabit"?"Novo Hábito":"Editar Hábito"} onClose={()=>setModal(null)}>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Nome</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} autoFocus placeholder="Ex: Beber 2L de água"/></div>
+<div className="fg" style={{maxWidth:80}}><label className="fl">Ícone</label><input value={form.icon||""} onChange={e=>setForm({...form,icon:e.target.value})} placeholder="⭐" style={{fontSize:20,textAlign:"center"}}/></div></div>
+<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{"⭐💧📖🏃‍♂️🧘‍♀️💪🥗💊🎯📝🌅🚫📱😴🧹".split(/(?=[\uD800-\uDBFF])|(?=[\u2600-\u27FF])|(?=[\uFE00-\uFE0F])/).filter(e=>e.trim()).map((em,i)=><span key={i} style={{fontSize:20,cursor:"pointer",padding:2}} onClick={()=>setForm({...form,icon:em})}>{em}</span>)}</div>
+<div className="fr"><div className="fg"><label className="fl">Tipo</label><select value={form.type||"check"} onChange={e=>setForm({...form,type:e.target.value})}><option value="check">Sim / Não</option><option value="qty">Quantidade</option><option value="time">Tempo (min)</option></select></div>
+{form.type&&form.type!=="check"&&<div className="fg"><label className="fl">Meta diária</label><input type="number" value={form.target||""} onChange={e=>setForm({...form,target:e.target.value})} placeholder={form.type==="qty"?"Ex: 8":"Ex: 30"}/></div>}
+{form.type==="qty"&&<div className="fg"><label className="fl">Unidade</label><input value={form.unit||""} onChange={e=>setForm({...form,unit:e.target.value})} placeholder="Ex: copos, páginas"/></div>}</div>
+<div className="fr"><div className="fg"><label className="fl">Categoria</label><select value={form.category||habitCats[0]} onChange={e=>setForm({...form,category:e.target.value})}>{habitCats.map(c=><option key={c}>{c}</option>)}</select></div>
+<div className="fg"><label className="fl">Período</label><select value={form.period||"anytime"} onChange={e=>setForm({...form,period:e.target.value})}><option value="anytime">Qualquer hora</option><option value="manha">Manhã</option><option value="tarde">Tarde</option><option value="noite">Noite</option></select></div></div>
+<div className="fr"><div className="fg"><label className="fl">Frequência</label><select value={form.freq||"diario"} onChange={e=>setForm({...form,freq:e.target.value})}><option value="diario">Diário</option><option value="dias">Dias específicos</option><option value="semanal">Semanal</option></select></div></div>
+{form.freq==="dias"&&<div style={{display:"flex",gap:6,marginBottom:12}}>{dayNames.map((d,i)=>{const sel=(form.freqDays||[]).includes(i);return(<button key={i} className={`btn ${sel?"bp":"bg"} bs`} onClick={()=>{const fd=[...(form.freqDays||[])];if(sel)fd.splice(fd.indexOf(i),1);else fd.push(i);setForm({...form,freqDays:fd});}} style={{borderRadius:20,minWidth:38}}>{d}</button>);})}</div>}
+<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={saveHabit}>Salvar</button></div>
+</Modal>}
+{/* Habit log modal (for qty/time) */}
+{modal==="logHabit"&&<Modal title={`${form.icon} ${form.name}`} onClose={()=>setModal(null)}>
+<div className="fg" style={{marginBottom:12}}><label className="fl">{form.type==="qty"?`Quantidade (${form.unit||"un"})`:"Minutos"}</label><input type="number" value={form.logVal||""} onChange={e=>setForm({...form,logVal:e.target.value})} autoFocus placeholder={`Meta: ${form.target}`}/></div>
+<div className="fg" style={{marginBottom:12}}><label className="fl">Nota (opcional)</label><input value={form.logNote||""} onChange={e=>setForm({...form,logNote:e.target.value})} placeholder="Como foi?"/></div>
+<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={()=>{setHabitVal(form.id,form.logDate,form.logVal,form.logNote);toast("Registrado!");setModal(null);}}>Salvar</button></div>
+</Modal>}
+{/* Todo modal */}
+{(modal==="addTodo"||modal==="editTodo")&&<Modal title={modal==="addTodo"?"Nova Tarefa":"Editar Tarefa"} onClose={()=>setModal(null)}>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Nome</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} autoFocus/></div></div>
+<div className="fg" style={{marginBottom:12}}><label className="fl">Descrição (opcional)</label><input value={form.desc||""} onChange={e=>setForm({...form,desc:e.target.value})} placeholder="Detalhes..."/></div>
+<div className="fr"><div className="fg"><label className="fl">Data</label><input type="date" value={form.due||""} onChange={e=>setForm({...form,due:e.target.value})}/></div>
+<div className="fg"><label className="fl">Prioridade</label><select value={form.priority||""} onChange={e=>setForm({...form,priority:e.target.value})}>{todoPriorities.map(p=><option key={p.v} value={p.v}>{p.l}</option>)}</select></div></div>
+<div className="fr"><div className="fg"><label className="fl">Lista</label><select value={form.list||todoLists[0]} onChange={e=>setForm({...form,list:e.target.value})}>{todoLists.map(l=><option key={l}>{l}</option>)}</select></div>
+{shared&&<div className="fg"><label className="fl">Atribuir a</label><select value={form.assignee||""} onChange={e=>setForm({...form,assignee:e.target.value})}><option value="">Ninguém</option><option>{myName}</option>{(data.members||[]).filter(m=>m!==myName).map(m=><option key={m}>{m}</option>)}</select></div>}</div>
+{/* Subtasks */}
+<div style={{marginBottom:12}}><label className="fl">Subtarefas</label>
+{(form.subtasks||[]).map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}><span style={{fontSize:13,flex:1,color:"var(--text2)"}}>{s.name}</span><button className="bi" style={{padding:3}} onClick={()=>rmSubtask(i)}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={12}/></button></div>))}
+<div style={{display:"flex",gap:6,marginTop:6}}><input value={newST} onChange={e=>setNewST(e.target.value)} placeholder="Nova subtarefa..." onKeyDown={e=>e.key==="Enter"&&addSubtask()} style={{flex:1,padding:"8px 10px",fontSize:13}}/><button className="btn bp bs" onClick={addSubtask}>{I.plus}</button></div>
+</div>
+<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={saveTodo}>Salvar</button></div>
+</Modal>}
+{/* Event modal */}
+{(modal==="addEvent"||modal==="editEvent")&&<Modal title={modal==="addEvent"?"Novo Evento":"Editar Evento"} onClose={()=>setModal(null)}>
+<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Título</label><input value={form.title||""} onChange={e=>setForm({...form,title:e.target.value})} autoFocus/></div></div>
+<div className="fr"><div className="fg"><label className="fl">Data</label><input type="date" value={form.date||td} onChange={e=>setForm({...form,date:e.target.value})}/></div>
+<div className="fg"><label className="fl">Cor</label><div style={{display:"flex",gap:6}}>{evColors.map(col=>(<div key={col} style={{width:24,height:24,borderRadius:12,background:col,cursor:"pointer",border:form.color===col?"3px solid var(--text)":"3px solid transparent",transition:"all .2s"}} onClick={()=>setForm({...form,color:col})}/>))}</div></div></div>
+<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,cursor:"pointer"}} onClick={()=>setForm({...form,allDay:!form.allDay})}>
+<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${form.allDay?"var(--blue)":"var(--border2)"}`,background:form.allDay?"var(--blue)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{form.allDay&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
+<span style={{fontSize:14,color:form.allDay?"var(--blue)":"var(--text3)",fontWeight:500}}>Dia inteiro</span></div>
+{!form.allDay&&<div className="fr"><div className="fg"><label className="fl">Início</label><input type="time" value={form.time||""} onChange={e=>setForm({...form,time:e.target.value})}/></div>
+<div className="fg"><label className="fl">Fim (opcional)</label><input type="time" value={form.endTime||""} onChange={e=>setForm({...form,endTime:e.target.value})}/></div></div>}
+<div className="fg" style={{marginBottom:12}}><label className="fl">Notas (opcional)</label><input value={form.notes||""} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Detalhes do evento..."/></div>
+<div className="ma"><button className="btn bg" onClick={()=>setModal(null)}>Cancelar</button><button className="btn bp" onClick={saveEvent}>Salvar</button></div>
+</Modal>}
+</div>);}
+
 // ─── PRICES ───
 function PricesPage({data,setData,toast}){const c=data.config;const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);const[search,setSearch]=useState("");const[modal,setModal]=useState(null);const[form,setForm]=useState({});const[editEntry,setEditEntry]=useState(null);const[editVal,setEditVal]=useState("");
 const ph=data.priceHistory||[];
@@ -999,6 +1230,8 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 <div className="card"><div className="sst">💳 Cartões / Formas de Pagamento</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Usados nas compras e finanças</p><TagEditor items={c.cards||[]} onAdd={v=>al("cards",v)} onRemove={v=>rl("cards",v)}/></div>
 <div className="card"><div className="sst">📥 Categorias de Receita</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Salário, VR, freelance, extras...</p><TagEditor items={c.incomeCategories||[]} onAdd={v=>al("incomeCategories",v)} onRemove={v=>rl("incomeCategories",v)}/></div>
 <div className="card"><div className="sst">⚖️ Categorias com Peso Variável</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Itens dessas categorias permitem registrar vários lotes com pesos e preços diferentes ao comprar (ex: 3 bandejas de morango)</p><TagEditor items={c.variableWeightCategories||[]} onAdd={v=>al("variableWeightCategories",v)} onRemove={v=>rl("variableWeightCategories",v)}/></div>
+<div className="card"><div className="sst">🔁 Categorias de Hábitos</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Organize seus hábitos por área da vida</p><TagEditor items={c.habitCategories||[]} onAdd={v=>al("habitCategories",v)} onRemove={v=>rl("habitCategories",v)}/></div>
+<div className="card"><div className="sst">📋 Listas de Tarefas</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Agrupe suas tarefas por projeto ou contexto</p><TagEditor items={c.todoLists||[]} onAdd={v=>al("todoLists",v)} onRemove={v=>rl("todoLists",v)}/></div>
 <div className="card"><div className="sst">{I.meals} Dias do Cardápio</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Quais dias aparecem no planejador</p><TagEditor items={c.mealDays} onAdd={v=>al("mealDays",v)} onRemove={v=>rl("mealDays",v)}/></div>
 <div className="card"><div className="sst">🍽 Tipos de Refeição</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Café, almoço, jantar... ou o que quiser</p><TagEditor items={c.mealTypes} onAdd={v=>al("mealTypes",v)} onRemove={v=>rl("mealTypes",v)}/></div></>}
 
@@ -1240,7 +1473,7 @@ const myTheme=userPrefs.theme||c.theme||"dark";
 const myAccent=userPrefs.accentColor||c.accentColor||"#F0A050";
 const tv=THEMES[myTheme]||THEMES.dark;const ac=myAccent;
 const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.expiry);return(d<=w&&d>=0)||d<0;}).length;const pg=data.grocery.filter(i=>!i.checked).length;
-const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"chores",label:"Tarefas",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"help",label:"Ajuda",icon:I.help},{id:"settings",label:"Configurações",icon:I.settings}];
+const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"routine",label:"Rotina",icon:I.routine},{id:"chores",label:"Tarefas Casa",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"help",label:"Ajuda",icon:I.help},{id:"settings",label:"Configurações",icon:I.settings}];
 const go=(id)=>{setPage(id);setSo(false);};
 return(<><style>{getCSS(tv,ac)}</style><div className="app">
 <div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span>{mode==="personal"&&<span style={{marginLeft:8,fontSize:10,background:"var(--purple-bg)",color:"var(--purple)",padding:"2px 8px",borderRadius:10,fontWeight:600}}>Pessoal</span>}</div>
@@ -1256,6 +1489,7 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 {page==="pantry"&&<PantryPage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
 {page==="grocery"&&<GroceryPage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
 {page==="chores"&&<ChoresPage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
+{page==="routine"&&<RoutinePage data={data} setData={setData} toast={toast} user={user} mode={mode}/>}
 {page==="meals"&&<MealsPage data={data} setData={setData} toast={toast}/>}
 {page==="budget"&&<BudgetPage data={data} setData={setData} toast={toast} user={user} mode={mode} houseInfo={houseInfo}/>}
 {page==="prices"&&<PricesPage data={data} setData={setData} toast={toast}/>}
