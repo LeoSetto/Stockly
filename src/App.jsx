@@ -343,6 +343,57 @@ const handleBlur=()=>{setDisplay(fmt(value));};
 return(<input ref={ref} inputMode="numeric" value={display} onChange={handleChange} onFocus={handleFocus} onBlur={handleBlur} placeholder={placeholder||"0,00"} autoFocus={autoFocus} onKeyDown={onKeyDown} style={{textAlign:"right",...(style||{})}}/>);
 }
 
+// ─── Avatar ───
+const AVATAR_COLORS=["#F0A050","#60A5FA","#4ADE80","#A78BFA","#F87171","#FBBF24","#34D399","#F472B6","#818CF8","#FB923C","#22D3EE","#E879F9"];
+const AVATAR_EMOJIS=["😊","😎","🤓","🥳","👨","👩","👦","👧","🧑‍💻","👨‍🍳","🏃","🎯","🦊","🐱","🌟","⚡","🔥","💎","🎮","🎵"];
+
+function UserAvatar({userPrefs,user,size,onClick}){
+const av=userPrefs?.avatar||{};const sz=size||36;
+const name=user?.displayName||user?.email?.split("@")[0]||"?";
+const initial=name[0]?.toUpperCase()||"?";
+const bgColor=av.color||AVATAR_COLORS[0];
+if(av.type==="image"&&av.imageUrl){return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",overflow:"hidden",cursor:onClick?"pointer":"default",border:"2px solid var(--border2)",flexShrink:0,transition:"all .2s"}}><img src={av.imageUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/></div>);}
+if(av.type==="emoji"&&av.emoji){return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",background:bgColor+"22",border:`2px solid ${bgColor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:sz*0.5,cursor:onClick?"pointer":"default",flexShrink:0,transition:"all .2s"}}>{av.emoji}</div>);}
+return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",background:`linear-gradient(135deg,${bgColor},${bgColor}cc)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:sz*0.4,fontWeight:800,color:"#fff",cursor:onClick?"pointer":"default",flexShrink:0,letterSpacing:-1,fontFamily:"'Sora',sans-serif",transition:"all .2s",boxShadow:`0 2px 8px ${bgColor}44`}}>{initial}</div>);
+}
+
+function AvatarEditor({userPrefs,setUserPrefs,user,toast}){
+const av=userPrefs?.avatar||{};const name=user?.displayName||user?.email?.split("@")[0]||"?";
+const[tab,setTab]=useState(av.type||"initials");
+const fileRef=useRef(null);
+const update=(changes)=>setUserPrefs(p=>({...p,avatar:{...(p.avatar||{}),type:tab,...changes}}));
+const handleImage=(e)=>{const file=e.target.files?.[0];if(!file)return;if(file.size>500000){toast("Imagem muito grande (máx 500KB)");return;}const reader=new FileReader();reader.onload=(ev)=>{update({type:"image",imageUrl:ev.target.result});toast("Foto atualizada");};reader.readAsDataURL(file);};
+return(<div className="card"><div className="sst">👤 Avatar</div>
+<div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
+<UserAvatar userPrefs={userPrefs} user={user} size={64}/>
+<div><div style={{fontSize:16,fontWeight:700}}>{name}</div><div style={{fontSize:12,color:"var(--text3)"}}>{user?.email||""}</div></div>
+</div>
+<div className="filter-scroll" style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+<button className={`btn ${tab==="initials"?"bp":"bg"} bs`} onClick={()=>{setTab("initials");update({type:"initials"});}}>Inicial</button>
+<button className={`btn ${tab==="emoji"?"bp":"bg"} bs`} onClick={()=>{setTab("emoji");update({type:"emoji",emoji:av.emoji||"😊"});}}>Emoji</button>
+<button className={`btn ${tab==="image"?"bp":"bg"} bs`} onClick={()=>setTab("image")}>Foto</button>
+</div>
+{tab==="initials"&&<div>
+<div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Escolha a cor do seu avatar</div>
+<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{AVATAR_COLORS.map(col=>(<div key={col} style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${col},${col}cc)`,cursor:"pointer",border:av.color===col?"3px solid var(--text)":"3px solid transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:"#fff",transition:"all .2s",fontFamily:"'Sora',sans-serif"}} onClick={()=>{update({color:col});toast("Cor atualizada");}}>{name[0]?.toUpperCase()}</div>))}</div>
+</div>}
+{tab==="emoji"&&<div>
+<div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Escolha um emoji</div>
+<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{AVATAR_EMOJIS.map(em=>(<div key={em} style={{width:40,height:40,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,cursor:"pointer",background:av.emoji===em?"var(--accent-glow)":"var(--bg3)",border:av.emoji===em?"2px solid var(--accent)":"2px solid transparent",transition:"all .2s"}} onClick={()=>{update({emoji:em});toast("Emoji atualizado");}}>{em}</div>))}</div>
+<div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Ou digite qualquer emoji:</div>
+<input value={av.emoji||""} onChange={e=>{const v=e.target.value;update({emoji:v.slice(-2)});}} placeholder="Cole um emoji aqui" style={{maxWidth:120,fontSize:24,textAlign:"center",padding:8}}/>
+<div style={{fontSize:12,color:"var(--text3)",marginTop:12,marginBottom:8}}>Cor de fundo</div>
+<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{AVATAR_COLORS.map(col=>(<div key={col} style={{width:28,height:28,borderRadius:"50%",background:col,cursor:"pointer",border:av.color===col?"3px solid var(--text)":"3px solid transparent",transition:"all .2s"}} onClick={()=>{update({color:col});}}/>))}</div>
+</div>}
+{tab==="image"&&<div>
+<div style={{fontSize:12,color:"var(--text3)",marginBottom:12}}>Envie uma foto (máx 500KB). A imagem fica salva no seu perfil.</div>
+<button className="btn bp" onClick={()=>fileRef.current?.click()}>📷 Escolher foto</button>
+<input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleImage}/>
+{av.imageUrl&&<div style={{marginTop:12}}><button className="btn bg bs" onClick={()=>{update({type:"initials",imageUrl:""});toast("Foto removida");}}>Remover foto</button></div>}
+</div>}
+</div>);
+}
+
 // ─── Confirm Delete (hold to delete) ───
 function ConfirmDelete({onConfirm,children,label}){
 const[confirming,setConfirming]=useState(false);
@@ -1230,7 +1281,8 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 </>}
 
 {tab==="aparencia"&&<>
-<div className="card" style={{background:"var(--accent-glow)",borderColor:"var(--accent)",marginBottom:16}}><div style={{fontSize:13,color:"var(--text2)",lineHeight:1.6}}>🎨 <strong style={{color:"var(--text)"}}>As configurações de aparência são individuais</strong> — cada pessoa da casa pode ter seu próprio tema e cor, sem afetar os outros.</div></div>
+<div className="card" style={{background:"var(--accent-glow)",borderColor:"var(--accent)",marginBottom:16}}><div style={{fontSize:13,color:"var(--text2)",lineHeight:1.6}}>🎨 <strong style={{color:"var(--text)"}}>As configurações de aparência são individuais</strong> — cada pessoa da casa pode ter seu próprio tema, cor e avatar, sem afetar os outros.</div></div>
+<AvatarEditor userPrefs={userPrefs} setUserPrefs={setUserPrefs} user={user} toast={toast}/>
 <div className="card"><div className="sst">{I.palette} Tema</div><div className="thg">{Object.entries(THEMES).map(([k,v])=>(<div key={k} className={`thc ${myTheme===k?"sel":""}`} style={{background:v["--bg2"],color:v["--text"],border:`2px solid ${myTheme===k?myAccent:v["--border"]}`}} onClick={()=>{setUserPrefs(p=>({...p,theme:k}));toast("Tema atualizado");}}><div style={{width:"100%",height:24,borderRadius:4,marginBottom:8,background:`linear-gradient(135deg,${v["--bg"]},${v["--bg3"]})`}}/>{k.charAt(0).toUpperCase()+k.slice(1)}</div>))}</div></div>
 <div className="card"><div className="sst">✦ Cor de Destaque</div><div className="cg">{ACCENT_COLORS.map(col=>(<div key={col} className={`cd ${myAccent===col?"sel":""}`} style={{background:col}} onClick={()=>{setUserPrefs(p=>({...p,accentColor:col}));toast("Cor atualizada");}}/>))}</div><div style={{marginTop:12,display:"flex",alignItems:"center",gap:8}}><label className="fl" style={{margin:0}}>Personalizada:</label><input type="color" value={myAccent} onChange={e=>{setUserPrefs(p=>({...p,accentColor:e.target.value}));}} style={{width:40,height:32,padding:2,cursor:"pointer"}}/><span style={{fontSize:12,color:"var(--text3)"}}>{myAccent}</span></div></div></>}
 
@@ -1712,13 +1764,13 @@ const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.
 const nav=[{id:"dashboard",label:"Painel",icon:I.home},{id:"pantry",label:"Despensa",icon:I.pantry,badge:ec>0?ec:null},{id:"grocery",label:"Compras",icon:I.grocery,badge:pg>0?pg:null},{id:"routine",label:"Rotina",icon:I.routine},{id:"chores",label:"Tarefas Casa",icon:I.chores},{id:"meals",label:"Cardápio",icon:I.meals},{id:"budget",label:"Finanças",icon:I.budget},{id:"prices",label:"Preços",icon:I.prices},{id:"help",label:"Ajuda",icon:I.help},{id:"settings",label:"Configurações",icon:I.settings}];
 const go=(id)=>{setPage(id);setSo(false);};
 return(<><style>{getCSS(tv,ac)}</style><div className="app">
-<div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{c.houseName}</span>{mode==="personal"&&<span style={{marginLeft:8,fontSize:10,background:"var(--purple-bg)",color:"var(--purple)",padding:"2px 8px",borderRadius:10,fontWeight:600}}>Pessoal</span>}</div>
+<div className="mh"><button className="hb" onClick={()=>setSo(!so)}>{I.menu}</button><span style={{marginLeft:12,fontFamily:"'Sora',sans-serif",fontWeight:800,fontSize:20,background:`linear-gradient(135deg,${ac},#FFD700)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",flex:1}}>{c.houseName}</span>{mode==="personal"&&<span style={{fontSize:10,background:"var(--purple-bg)",color:"var(--purple)",padding:"2px 8px",borderRadius:10,fontWeight:600,marginRight:8}}>Pessoal</span>}<UserAvatar userPrefs={userPrefs} user={user} size={30} onClick={()=>go("settings")}/></div>
 <nav className={`sb ${so?"open":""}`}><div className="sb-h"><div className="logo">{c.houseName}</div><div className="logo-s">{mode==="personal"?"modo pessoal":"gestão doméstica"}</div></div>
 {/* Mode toggle in sidebar */}
 <div style={{padding:"0 12px 8px"}}><button onClick={toggleMode} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--border)",background:mode==="shared"?"var(--accent-glow)":"var(--purple-bg)",color:mode==="shared"?"var(--accent)":"var(--purple)",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .2s"}}>{mode==="shared"?<>{I.users} Compartilhado</>:<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Pessoal</>}</button></div>
 <div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
 <SidebarInstallBtn installHook={installHook}/>
-<div className="sb-f"><div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{user?user.displayName||user.email:data.members.join(", ")}</span>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
+<div className="sb-f"><div style={{display:"flex",alignItems:"center",gap:10}}><UserAvatar userPrefs={userPrefs} user={user} size={32}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?user.displayName||user.email:data.members.join(", ")}</div><div style={{fontSize:10,color:"var(--text3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.email||""}</div></div>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
 {so&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}} onClick={()=>setSo(false)}/>}
 <main className="mc">
 {page==="dashboard"&&<Dashboard data={data} goTo={go} user={user} mode={mode}/>}
