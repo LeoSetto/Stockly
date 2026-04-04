@@ -188,7 +188,7 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 /* Core layout */
 .sb{transform:translateX(-100%);width:280px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .sb.open{transform:translateX(0)}
-.mc{margin-left:0;padding:60px 12px 80px;max-width:100vw;overflow-x:hidden}
+.mc{margin-left:0;padding:60px 16px 80px;max-width:100vw;overflow-x:hidden}
 .mh{display:flex;height:52px}
 .app{overflow-x:hidden;max-width:100vw}
 
@@ -207,7 +207,7 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 
 /* Dashboard grid */
 .dg{grid-template-columns:1fr;gap:0}
-.dg .card{margin-bottom:8px;border-radius:14px;border:1px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.dg>.card{margin-bottom:12px;margin-left:2px;margin-right:2px;border-radius:14px;border:1px solid var(--border2);box-shadow:0 2px 12px rgba(0,0,0,.18)}
 
 /* Cards */
 .card{padding:14px;margin-bottom:10px;border-radius:12px}
