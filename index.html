@@ -174,6 +174,13 @@
     #root.ready {
       opacity: 1;
     }
+
+    /* Hide any "Carregando" text that React renders during auth init */
+    #root:not(.ready) {
+      visibility: hidden;
+      height: 0;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
@@ -201,29 +208,38 @@
 
   <script type="module" src="/src/main.jsx"></script>
   <script>
-    // Hide splash when app is ready
     function hideSplash() {
-      const splash = document.getElementById('splash');
-      const root = document.getElementById('root');
-      if (splash) splash.classList.add('hide');
+      var splash = document.getElementById('splash');
+      var root = document.getElementById('root');
       if (root) root.classList.add('ready');
-      setTimeout(() => { if (splash) splash.remove(); }, 500);
+      if (splash) splash.classList.add('hide');
+      setTimeout(function() { if (splash) splash.remove(); }, 500);
     }
 
-    // Wait for React to render, then hide splash
-    const observer = new MutationObserver((mutations, obs) => {
-      const root = document.getElementById('root');
-      if (root && root.children.length > 0) {
-        // Give a tiny extra moment for paint
-        setTimeout(hideSplash, 200);
+    // Check if root has actual app content (not just "Carregando" text)
+    function isAppReady() {
+      var root = document.getElementById('root');
+      if (!root || !root.children.length) return false;
+      // The app renders a div.app with sidebar+main — look for that
+      var app = root.querySelector('.app');
+      if (app) return true;
+      // Also check for login form (if user is not logged in)
+      var form = root.querySelector('form, input[type="email"], button');
+      if (form) return true;
+      return false;
+    }
+
+    var observer = new MutationObserver(function(mutations, obs) {
+      if (isAppReady()) {
+        setTimeout(hideSplash, 100);
         obs.disconnect();
       }
     });
 
-    observer.observe(document.getElementById('root'), { childList: true });
+    observer.observe(document.getElementById('root'), { childList: true, subtree: true });
 
-    // Fallback: hide after 4s no matter what
-    setTimeout(hideSplash, 4000);
+    // Fallback
+    setTimeout(hideSplash, 5000);
   </script>
 </body>
 </html>
