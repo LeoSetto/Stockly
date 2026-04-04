@@ -188,9 +188,10 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 /* Core layout */
 .sb{transform:translateX(-100%);width:280px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .sb.open{transform:translateX(0)}
-.mc{margin-left:0;padding:60px 16px 80px;max-width:100vw;overflow-x:hidden}
+.mc{margin-left:0;padding:60px 16px 80px;max-width:100vw;overflow-x:hidden;box-sizing:border-box}
 .mh{display:flex;height:52px}
-.app{overflow-x:hidden;max-width:100vw}
+.app{overflow-x:hidden;max-width:100vw;width:100%}
+body,html,#root{overflow-x:hidden;max-width:100vw}
 
 /* Typography */
 .ph{margin-bottom:16px}
@@ -206,11 +207,11 @@ input,select,textarea{background:var(--bg3);border:1px solid var(--border);borde
 .sd{font-size:11px}
 
 /* Dashboard grid */
-.dg{grid-template-columns:1fr;gap:0}
-.dg>.card{margin-bottom:12px;margin-left:2px;margin-right:2px;border-radius:14px;border:1px solid var(--border2);box-shadow:0 2px 12px rgba(0,0,0,.18)}
+.dg{grid-template-columns:1fr;gap:0;padding:0 2px}
+.dg>.card{margin-bottom:12px;border-radius:16px;border:1.5px solid var(--border2);box-shadow:0 3px 16px rgba(0,0,0,.22);background:var(--bg2)}
 
 /* Cards */
-.card{padding:14px;margin-bottom:10px;border-radius:12px}
+.card{padding:14px;margin-bottom:10px;border-radius:12px;overflow:hidden}
 .ct{font-size:14px;margin-bottom:10px}
 
 /* Toolbar - stack vertically */
