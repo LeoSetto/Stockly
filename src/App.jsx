@@ -352,9 +352,10 @@ const av=userPrefs?.avatar||{};const sz=size||36;
 const name=user?.displayName||user?.email?.split("@")[0]||"?";
 const initial=name[0]?.toUpperCase()||"?";
 const bgColor=av.color||AVATAR_COLORS[0];
-if(av.type==="image"&&av.imageUrl){return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",overflow:"hidden",cursor:onClick?"pointer":"default",border:"2px solid var(--border2)",flexShrink:0,transition:"all .2s"}}><img src={av.imageUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/></div>);}
-if(av.type==="emoji"&&av.emoji){return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",background:bgColor+"22",border:`2px solid ${bgColor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:sz*0.5,cursor:onClick?"pointer":"default",flexShrink:0,transition:"all .2s"}}>{av.emoji}</div>);}
-return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",background:`linear-gradient(135deg,${bgColor},${bgColor}cc)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:sz*0.4,fontWeight:800,color:"#fff",cursor:onClick?"pointer":"default",flexShrink:0,letterSpacing:-1,fontFamily:"'Sora',sans-serif",transition:"all .2s",boxShadow:`0 2px 8px ${bgColor}44`}}>{initial}</div>);
+const clickStyle=onClick?{cursor:"pointer",WebkitTapHighlightColor:"transparent"}:{};
+if(av.type==="image"&&av.imageUrl){return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",overflow:"hidden",border:"2px solid var(--border2)",flexShrink:0,transition:"all .2s",...clickStyle}}><img src={av.imageUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/></div>);}
+if(av.type==="emoji"&&av.emoji){return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",background:bgColor+"22",border:`2px solid ${bgColor}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.max(sz*0.45,14),lineHeight:1,overflow:"hidden",flexShrink:0,transition:"all .2s",...clickStyle}}><span style={{display:"block",lineHeight:1}}>{av.emoji}</span></div>);}
+return(<div onClick={onClick} style={{width:sz,height:sz,borderRadius:"50%",background:`linear-gradient(135deg,${bgColor},${bgColor}cc)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:sz*0.4,fontWeight:800,color:"#fff",flexShrink:0,letterSpacing:-1,fontFamily:"'Sora',sans-serif",transition:"all .2s",boxShadow:`0 2px 8px ${bgColor}44`,...clickStyle}}>{initial}</div>);
 }
 
 function AvatarEditor({userPrefs,setUserPrefs,user,toast}){
@@ -381,7 +382,7 @@ return(<div className="card"><div className="sst">👤 Avatar</div>
 <div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Escolha um emoji</div>
 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{AVATAR_EMOJIS.map(em=>(<div key={em} style={{width:40,height:40,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,cursor:"pointer",background:av.emoji===em?"var(--accent-glow)":"var(--bg3)",border:av.emoji===em?"2px solid var(--accent)":"2px solid transparent",transition:"all .2s"}} onClick={()=>{update({emoji:em});toast("Emoji atualizado");}}>{em}</div>))}</div>
 <div style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Ou digite qualquer emoji:</div>
-<input value={av.emoji||""} onChange={e=>{const v=e.target.value;update({emoji:v.slice(-2)});}} placeholder="Cole um emoji aqui" style={{maxWidth:120,fontSize:24,textAlign:"center",padding:8}}/>
+<input value={av.emoji||""} onChange={e=>{const v=e.target.value;const emojis=[...v];update({emoji:emojis.length>0?emojis[emojis.length-1]:""});}} placeholder="Cole um emoji aqui" style={{maxWidth:120,fontSize:24,textAlign:"center",padding:8}}/>
 <div style={{fontSize:12,color:"var(--text3)",marginTop:12,marginBottom:8}}>Cor de fundo</div>
 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{AVATAR_COLORS.map(col=>(<div key={col} style={{width:28,height:28,borderRadius:"50%",background:col,cursor:"pointer",border:av.color===col?"3px solid var(--text)":"3px solid transparent",transition:"all .2s"}} onClick={()=>{update({color:col});}}/>))}</div>
 </div>}
@@ -1730,7 +1731,7 @@ const[showTour,setShowTour]=useState(()=>{try{return!localStorage.getItem(`stock
 const[userPrefs,setUserPrefsRaw]=useState(()=>{try{const p=localStorage.getItem(`stockly-prefs-${uid}`);return p?JSON.parse(p):{};}catch{return{};}});
 const mode=userPrefs.mode||"shared"; // "shared" or "personal"
 const[data,setDataRaw]=useState(()=>{const l=load(uid);const base=l?{...DEFAULT_DATA,...l,config:{...DEFAULT_CONFIG,...(l.config||{})}}:DEFAULT_DATA;return migrateData(base);});
-const[page,setPage]=useState("dashboard");const[so,setSo]=useState(false);const[tm,setTm]=useState("");
+const[page,setPageRaw]=useState(()=>{try{return localStorage.getItem(`stockly-page-${uid}`)||"dashboard";}catch{return"dashboard";}});const setPage=(p)=>{setPageRaw(p);try{localStorage.setItem(`stockly-page-${uid}`,p);}catch{}};const[so,setSo]=useState(false);const[tm,setTm]=useState("");
 
 // Load data from Firebase based on mode
 useEffect(()=>{
@@ -1770,7 +1771,7 @@ return(<><style>{getCSS(tv,ac)}</style><div className="app">
 <div style={{padding:"0 12px 8px"}}><button onClick={toggleMode} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--border)",background:mode==="shared"?"var(--accent-glow)":"var(--purple-bg)",color:mode==="shared"?"var(--accent)":"var(--purple)",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .2s"}}>{mode==="shared"?<>{I.users} Compartilhado</>:<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Pessoal</>}</button></div>
 <div className="nav">{nav.map(n=><button key={n.id} className={`ni ${page===n.id?"a":""}`} onClick={()=>go(n.id)}>{n.icon}{n.label}{n.badge&&<span className="nb">{n.badge}</span>}</button>)}</div>
 <SidebarInstallBtn installHook={installHook}/>
-<div className="sb-f"><div style={{display:"flex",alignItems:"center",gap:10}}><UserAvatar userPrefs={userPrefs} user={user} size={32}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?user.displayName||user.email:data.members.join(", ")}</div><div style={{fontSize:10,color:"var(--text3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.email||""}</div></div>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
+<div className="sb-f"><div style={{display:"flex",alignItems:"center",gap:10}}><UserAvatar userPrefs={userPrefs} user={user} size={32} onClick={()=>go("settings")}/><div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?user.displayName||user.email:data.members.join(", ")}</div><div style={{fontSize:10,color:"var(--text3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user?.email||""}</div></div>{logout&&<button className="bi" onClick={logout} title="Sair" style={{padding:4}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>}</div></div></nav>
 {so&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:99}} onClick={()=>setSo(false)}/>}
 <main className="mc">
 {page==="dashboard"&&<Dashboard data={data} goTo={go} user={user} mode={mode}/>}
