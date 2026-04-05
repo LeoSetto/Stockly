@@ -523,6 +523,12 @@ const isCountable=(u)=>COUNTABLE_UNITS.includes(u);
 
 function GroceryPage({data,setData,toast,user,mode}){const c=data.config;const[modal,setModal]=useState(false);const[form,setForm]=useState({});const[priceModal,setPriceModal]=useState(null);const[unitPriceVal,setUnitPriceVal]=useState("");const[editingPrice,setEditingPrice]=useState(null);const[editUP,setEditUP]=useState("");const[finishModal,setFinishModal]=useState(false);const[finishCard,setFinishCard]=useState(c.cards?.[0]||"");const[finishPaid,setFinishPaid]=useState(false);
 const[lots,setLots]=useState([]);const[lotsMode,setLotsMode]=useState(false);
+// Drag to reorder
+const[dragId,setDragId]=useState(null);const[dragOverId,setDragOverId]=useState(null);
+const onDragStart=(id)=>setDragId(id);
+const onDragOver=(e,id)=>{e.preventDefault();if(id!==dragOverId)setDragOverId(id);};
+const onDrop=(targetId)=>{if(!dragId||dragId===targetId)return;setData(d=>{const items=[...d.grocery];const fromIdx=items.findIndex(i=>i.id===dragId);const toIdx=items.findIndex(i=>i.id===targetId);if(fromIdx<0||toIdx<0)return d;const[moved]=items.splice(fromIdx,1);items.splice(toIdx,0,moved);return{...d,grocery:items};});setDragId(null);setDragOverId(null);};
+const onDragEnd=()=>{setDragId(null);setDragOverId(null);};
 const vwCats=c.variableWeightCategories||[];
 const isVW=(cat)=>vwCats.includes(cat);
 const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
@@ -553,7 +559,7 @@ const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"num
 const expense={id:Date.now()+1,desc,amount:total,category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id,type:"variavel"};
 setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[expense,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
 toast(`Compra finalizada! ${fmt(total)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
-const pend=data.grocery.filter(i=>!i.checked).sort((a,b)=>(a.category||"").localeCompare(b.category||""));const done=data.grocery.filter(i=>i.checked);
+const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
 const doneTotal=done.reduce((a,i)=>a+(i.price||0),0);
 const lastUnitPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.unitPrice||h[0]?.totalPrice||null;};
 // Group pending by category
@@ -561,10 +567,11 @@ const pendByCat={};pend.forEach(i=>{const cat=i.category||"Outros";if(!pendByCat
 const catOrder=Object.keys(pendByCat).sort();
 return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados{doneTotal>0&&` · Total: ${fmt(doneTotal)}`}</div></div>
 <div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setModal(true);}}>{I.plus} Adicionar</button>
+{pend.length>0&&<button className="btn bg" onClick={()=>{const txt="🛒 *Lista de Compras — "+c.houseName+"*\n\n"+catOrder.map(cat=>(catOrder.length>1?"*"+cat+"*\n":"")+pendByCat[cat].map(i=>"☐ "+i.name+" ("+i.qty+" "+i.unit+")").join("\n")).join("\n\n")+"\n\n_Enviado pelo Stockly_";if(navigator.share){navigator.share({text:txt}).catch(()=>{});}else{window.open("https://wa.me/?text="+encodeURIComponent(txt),"_blank");}}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg> Compartilhar</button>}
 {done.length>0&&<button className="btn bg" onClick={openFinish}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
 {catOrder.map(cat=>(<div key={cat}>{catOrder.length>1&&<div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1.5,background:"var(--bg3)",borderBottom:"1px solid var(--border)"}}>{cat} ({pendByCat[cat].length})</div>}
-{pendByCat[cat].map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}{catOrder.length<=1&&<span className="tg tg-n">{i.category}</span>}<ConfirmDelete onConfirm={()=>rem(i.id)}/></div>);})}</div>))}{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
+{pendByCat[cat].map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id} draggable onDragStart={()=>onDragStart(i.id)} onDragOver={e=>onDragOver(e,i.id)} onDrop={()=>onDrop(i.id)} onDragEnd={onDragEnd} style={{opacity:dragId===i.id?.4:1,borderTop:dragOverId===i.id&&dragId!==i.id?"2px solid var(--accent)":"2px solid transparent",transition:"opacity .15s"}}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}{catOrder.length<=1&&<span className="tg tg-n">{i.category}</span>}<ConfirmDelete onConfirm={()=>rem(i.id)}/></div>);})}</div>))}{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
 {done.map(i=>{const cnt=isCountable(i.unit);const hasLots=i.lots&&i.lots.length>1;return(<div className="cr" key={i.id} style={{opacity:.7,flexWrap:"wrap"}}>
 <div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>
 <span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>
@@ -1284,7 +1291,14 @@ return(<div><div className="ph"><div className="pt">Configurações</div><div cl
 {tab==="aparencia"&&<>
 <div className="card" style={{background:"var(--accent-glow)",borderColor:"var(--accent)",marginBottom:16}}><div style={{fontSize:13,color:"var(--text2)",lineHeight:1.6}}>🎨 <strong style={{color:"var(--text)"}}>As configurações de aparência são individuais</strong> — cada pessoa da casa pode ter seu próprio tema, cor e avatar, sem afetar os outros.</div></div>
 <AvatarEditor userPrefs={userPrefs} setUserPrefs={setUserPrefs} user={user} toast={toast}/>
-<div className="card"><div className="sst">{I.palette} Tema</div><div className="thg">{Object.entries(THEMES).map(([k,v])=>(<div key={k} className={`thc ${myTheme===k?"sel":""}`} style={{background:v["--bg2"],color:v["--text"],border:`2px solid ${myTheme===k?myAccent:v["--border"]}`}} onClick={()=>{setUserPrefs(p=>({...p,theme:k}));toast("Tema atualizado");}}><div style={{width:"100%",height:24,borderRadius:4,marginBottom:8,background:`linear-gradient(135deg,${v["--bg"]},${v["--bg3"]})`}}/>{k.charAt(0).toUpperCase()+k.slice(1)}</div>))}</div></div>
+<div className="card"><div className="sst">{I.palette} Tema</div>
+<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",marginBottom:12,borderBottom:"1px solid var(--border)"}}>
+<div><div style={{fontSize:14,fontWeight:600,color:"var(--text)"}}>Tema automático</div><div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>Seguir o tema do sistema (claro/escuro)</div></div>
+<div style={{width:44,height:24,borderRadius:12,background:userPrefs.autoTheme?"var(--accent)":"var(--bg4)",cursor:"pointer",padding:2,transition:"all .25s",display:"flex",alignItems:userPrefs.autoTheme?"center":"center"}} onClick={()=>{setUserPrefs(p=>({...p,autoTheme:!p.autoTheme}));toast(userPrefs.autoTheme?"Tema manual":"Tema automático ativado");}}><div style={{width:20,height:20,borderRadius:10,background:"#fff",transition:"all .25s cubic-bezier(.4,0,.2,1)",transform:userPrefs.autoTheme?"translateX(20px)":"translateX(0)",boxShadow:"0 1px 4px rgba(0,0,0,.3)"}}/></div>
+</div>
+{!userPrefs.autoTheme&&<div className="thg">{Object.entries(THEMES).map(([k,v])=>(<div key={k} className={`thc ${myTheme===k?"sel":""}`} style={{background:v["--bg2"],color:v["--text"],border:`2px solid ${myTheme===k?myAccent:v["--border"]}`}} onClick={()=>{setUserPrefs(p=>({...p,theme:k}));toast("Tema atualizado");}}><div style={{width:"100%",height:24,borderRadius:4,marginBottom:8,background:`linear-gradient(135deg,${v["--bg"]},${v["--bg3"]})`}}/>{k.charAt(0).toUpperCase()+k.slice(1)}</div>))}</div>}
+{userPrefs.autoTheme&&<div style={{padding:"12px 0",fontSize:13,color:"var(--text3)",textAlign:"center"}}>Tema atual: <strong style={{color:"var(--accent)"}}>{myTheme}</strong> (baseado no seu sistema)</div>}
+</div>
 <div className="card"><div className="sst">✦ Cor de Destaque</div><div className="cg">{ACCENT_COLORS.map(col=>(<div key={col} className={`cd ${myAccent===col?"sel":""}`} style={{background:col}} onClick={()=>{setUserPrefs(p=>({...p,accentColor:col}));toast("Cor atualizada");}}/>))}</div><div style={{marginTop:12,display:"flex",alignItems:"center",gap:8}}><label className="fl" style={{margin:0}}>Personalizada:</label><input type="color" value={myAccent} onChange={e=>{setUserPrefs(p=>({...p,accentColor:e.target.value}));}} style={{width:40,height:32,padding:2,cursor:"pointer"}}/><span style={{fontSize:12,color:"var(--text3)"}}>{myAccent}</span></div></div></>}
 
 {tab==="categorias"&&<><div className="card"><div className="sst">{I.pantry} Categorias da Despensa</div><p style={{fontSize:12,color:"var(--text3)",marginBottom:8}}>Usadas na despensa e lista de compras</p><TagEditor items={c.pantryCategories} onAdd={v=>al("pantryCategories",v)} onRemove={v=>rl("pantryCategories",v)}/></div>
@@ -1758,7 +1772,12 @@ const toast=useCallback((m)=>{setTm(m);if(toastTimer.current)clearTimeout(toastT
 const doUndo=useCallback(()=>{if(undoRef.current){setDataRaw(undoRef.current);save(undoRef.current,uid);if(user&&saveFn)saveFn(undoRef.current);undoRef.current=null;setTm("Ação desfeita!");setTimeout(()=>setTm(""),2000);}},[user,uid,saveFn]);
 const finishTour=()=>{setShowTour(false);try{localStorage.setItem(`stockly-tour-${uid}`,"1");}catch{}};
 const c=data.config;
-const myTheme=userPrefs.theme||c.theme||"dark";
+// Auto theme: follow system preference if enabled
+const[systemDark,setSystemDark]=useState(()=>{try{return window.matchMedia("(prefers-color-scheme:dark)").matches;}catch{return true;}});
+useEffect(()=>{try{const mq=window.matchMedia("(prefers-color-scheme:dark)");const handler=(e)=>setSystemDark(e.matches);mq.addEventListener("change",handler);return()=>mq.removeEventListener("change",handler);}catch{}},[]);
+const autoTheme=userPrefs.autoTheme||false;
+const resolvedTheme=autoTheme?(systemDark?"dark":"light"):(userPrefs.theme||c.theme||"dark");
+const myTheme=resolvedTheme;
 const myAccent=userPrefs.accentColor||c.accentColor||"#F0A050";
 const tv=THEMES[myTheme]||THEMES.dark;const ac=myAccent;
 const w=c.expiryWarnDays||7;const ec=data.pantry.filter(i=>{const d=daysUntil(i.expiry);return(d<=w&&d>=0)||d<0;}).length;const pg=data.grocery.filter(i=>!i.checked).length;
