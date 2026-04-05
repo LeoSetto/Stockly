@@ -418,15 +418,15 @@ const actions=[
 {label:"Gasto",icon:I.budget,color:"var(--red)",action:()=>goTo("budget")},
 {label:"Tarefa",icon:I.chores,color:"var(--yellow)",action:()=>goTo("chores")},
 ];
-return(<div className="m-only" style={{position:"fixed",bottom:24,right:20,zIndex:150,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:10}}>
-{open&&<div style={{display:"flex",flexDirection:"column",gap:8,animation:"su .2s ease"}}>
-{actions.map((a,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,animation:`su ${.1+i*.06}s ease`}}>
+return(<div className="m-only" style={{position:"fixed",bottom:24,right:20,zIndex:150,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:12}}>
+{open&&<div style={{display:"flex",flexDirection:"column",gap:10,paddingRight:6}}>
+{actions.map((a,i)=>(<div key={i} style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:10,animation:`su ${.1+i*.06}s ease`}}>
 <span style={{fontSize:12,fontWeight:600,color:"var(--text)",background:"var(--bg2)",padding:"6px 12px",borderRadius:8,boxShadow:"var(--shadow)",whiteSpace:"nowrap"}}>{a.label}</span>
-<button onClick={()=>{a.action();setOpen(false);}} style={{width:44,height:44,borderRadius:22,border:"none",background:a.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 4px 16px rgba(0,0,0,.3)`,transition:"all .2s"}}>{a.icon}</button>
+<button onClick={()=>{a.action();setOpen(false);}} style={{width:44,height:44,borderRadius:22,border:"none",background:a.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,.3)",transition:"all .2s",flexShrink:0}}>{a.icon}</button>
 </div>))}
 </div>}
 {open&&<div style={{position:"fixed",inset:0,zIndex:-1}} onClick={()=>setOpen(false)}/>}
-<button onClick={()=>setOpen(!open)} style={{width:56,height:56,borderRadius:28,border:"none",background:`linear-gradient(135deg,var(--accent),var(--accent2))`,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:`0 6px 24px rgba(0,0,0,.4)`,transition:"all .3s cubic-bezier(.4,0,.2,1)",transform:open?"rotate(45deg)":"rotate(0)"}}>
+<button onClick={()=>setOpen(!open)} style={{width:56,height:56,borderRadius:28,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent2))",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 24px rgba(0,0,0,.4)",transition:"all .3s cubic-bezier(.4,0,.2,1)",transform:open?"rotate(45deg)":"rotate(0)"}}>
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 </button></div>);
 }
