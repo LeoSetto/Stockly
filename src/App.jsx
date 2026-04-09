@@ -529,6 +529,22 @@ const onDragStart=(id)=>setDragId(id);
 const onDragOver=(e,id)=>{e.preventDefault();if(id!==dragOverId)setDragOverId(id);};
 const onDrop=(targetId)=>{if(!dragId||dragId===targetId)return;setData(d=>{const items=[...d.grocery];const fromIdx=items.findIndex(i=>i.id===dragId);const toIdx=items.findIndex(i=>i.id===targetId);if(fromIdx<0||toIdx<0)return d;const[moved]=items.splice(fromIdx,1);items.splice(toIdx,0,moved);return{...d,grocery:items};});setDragId(null);setDragOverId(null);};
 const onDragEnd=()=>{setDragId(null);setDragOverId(null);};
+// Bulk select
+const[bulkMode,setBulkMode]=useState(false);const[bulkSel,setBulkSel]=useState({});
+const toggleBulk=(id)=>setBulkSel(s=>({...s,[id]:!s[id]}));
+const selCount=Object.values(bulkSel).filter(Boolean).length;
+const selectAll=(list)=>{const s={};list.forEach(i=>s[i.id]=true);setBulkSel(s);};
+const deselectAll=()=>setBulkSel({});
+const bulkDelete=()=>{const ids=Object.keys(bulkSel).filter(k=>bulkSel[k]);if(ids.length===0)return;setData(d=>({...d,grocery:d.grocery.filter(i=>!ids.includes(String(i.id)))}));toast(`${ids.length} ite${ids.length>1?"ns":"m"} removido${ids.length>1?"s":""}`);setBulkSel({});setBulkMode(false);};
+// Autocomplete
+const allNames=[...new Set([...data.grocery.map(i=>i.name),...data.pantry.map(i=>i.name),...(data.priceHistory||[]).map(p=>p.name)])].sort();
+const[suggestions,setSuggestions]=useState([]);
+const onNameChange=(v)=>{setForm({...form,name:v});if(v.length>=2){const low=v.toLowerCase();setSuggestions(allNames.filter(n=>n.toLowerCase().includes(low)&&n.toLowerCase()!==low).slice(0,5));}else setSuggestions([]);};
+// Split finish
+const[finishSplits,setFinishSplits]=useState([]);
+const addFinishSplit=()=>setFinishSplits(s=>[...s,{card:c.cards?.[1]||c.cards?.[0]||"",amount:0,person:""}]);
+const updateFinishSplit=(idx,field,val)=>setFinishSplits(s=>s.map((sp,i)=>i===idx?{...sp,[field]:val}:sp));
+const removeFinishSplit=(idx)=>setFinishSplits(s=>s.filter((_,i)=>i!==idx));
 const vwCats=c.variableWeightCategories||[];
 const isVW=(cat)=>vwCats.includes(cat);
 const fmt=(n)=>fmtCurrency(n,c.locale,c.currency);
@@ -554,30 +570,43 @@ const saveEditPrice=()=>{if(!editingPrice)return;const up=Number(editUP)||0;cons
 const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
 const add=()=>{if(!form.name)return;if(modal==="edit"){setData(d=>({...d,grocery:d.grocery.map(i=>i.id===form.id?{...i,name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],category:form.category||c.pantryCategories[0]}:i)}));toast("Item atualizado");}else{setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:0,unitPrice:0}]}));toast("Adicionado");}setModal(false);};
 const editItem=(item)=>{setForm({id:item.id,name:item.name,qty:item.qty,unit:item.unit,category:item.category});setModal("edit");};
-const openFinish=()=>{setFinishCard(c.cards?.[0]||"");setFinishPaid(false);setFinishModal(true);};
-const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard};
+const openFinish=()=>{setFinishCard(c.cards?.[0]||"");setFinishPaid(false);setFinishSplits([]);setFinishModal(true);};
+const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard,splits:finishSplits.length>0?finishSplits:undefined};
 const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"});
-const expense={id:Date.now()+1,desc,amount:total,category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id,type:"variavel"};
+const myAmount=total-finishSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
+const expense={id:Date.now()+1,desc,amount:Math.max(myAmount,0),category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id,type:"variavel",splitTotal:finishSplits.length>0?total:0,splitMyShare:finishSplits.length>0?myAmount:0,splitPayers:finishSplits.filter(s=>s.amount>0).map(s=>({name:s.person||s.card||"Outro",amount:Number(s.amount)||0}))};
 setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[expense,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
-toast(`Compra finalizada! ${fmt(total)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
+toast(`Compra finalizada! ${fmt(myAmount)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
 const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
 const doneTotal=done.reduce((a,i)=>a+(i.price||0),0);
+const splitTotal=finishSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
+const mainAmount=doneTotal-splitTotal;
 const lastUnitPrice=(name)=>{const h=(data.priceHistory||[]).filter(p=>p.name.toLowerCase()===name.toLowerCase()).sort((a,b)=>b.date.localeCompare(a.date));return h[0]?.unitPrice||h[0]?.totalPrice||null;};
 // Group pending by category
 const pendByCat={};pend.forEach(i=>{const cat=i.category||"Outros";if(!pendByCat[cat])pendByCat[cat]=[];pendByCat[cat].push(i);});
 const catOrder=Object.keys(pendByCat).sort();
 return(<div><div className="ph"><div className="pt">Lista de Compras</div><div className="ps">{pend.length} pendentes · {done.length} comprados{doneTotal>0&&` · Total: ${fmt(doneTotal)}`}</div></div>
-<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setModal(true);}}>{I.plus} Adicionar</button>
+<div className="tb"><button className="btn bp" onClick={()=>{setForm({name:"",qty:"",unit:c.units[0],category:c.pantryCategories[0]});setSuggestions([]);setModal(true);}}>{I.plus} Adicionar</button>
 {pend.length>0&&<button className="btn bg" onClick={()=>{const txt="🛒 *Lista de Compras — "+c.houseName+"*\n\n"+catOrder.map(cat=>(catOrder.length>1?"*"+cat+"*\n":"")+pendByCat[cat].map(i=>"☐ "+i.name+" ("+i.qty+" "+i.unit+")").join("\n")).join("\n\n")+"\n\n_Enviado pelo Stockly_";if(navigator.share){navigator.share({text:txt}).catch(()=>{});}else{window.open("https://wa.me/?text="+encodeURIComponent(txt),"_blank");}}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg> Compartilhar</button>}
-{done.length>0&&<button className="btn bg" onClick={openFinish}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
+{(pend.length>0||done.length>0)&&<button className={`btn ${bulkMode?"bp":"bg"} bs`} onClick={()=>{setBulkMode(!bulkMode);setBulkSel({});}}>{bulkMode?"✕ Sair":"☑ Selecionar"}</button>}
+{done.length>0&&!bulkMode&&<button className="btn bg" onClick={openFinish}>Finalizar Compra ({fmt(doneTotal)})</button>}</div>
+{bulkMode&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+<button className="btn bg bs" onClick={()=>selectAll([...pend,...done])}>Selecionar Tudo ({pend.length+done.length})</button>
+<button className="btn bg bs" onClick={()=>selectAll(pend)}>Pendentes ({pend.length})</button>
+<button className="btn bg bs" onClick={()=>selectAll(done)}>Comprados ({done.length})</button>
+<button className="btn bg bs" onClick={deselectAll}>Limpar</button>
+{selCount>0&&<button className="btn bd bs" onClick={bulkDelete}>{I.trash} Apagar {selCount}</button>}
+</div>}
 <div className="card" style={{padding:0}}>{pend.length===0&&done.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--text3)"}}>Lista vazia</div>}
 {catOrder.map(cat=>(<div key={cat}>{catOrder.length>1&&<div style={{padding:"8px 16px",fontSize:11,fontWeight:700,color:"var(--text3)",textTransform:"uppercase",letterSpacing:1.5,background:"var(--bg3)",borderBottom:"1px solid var(--border)"}}>{cat} ({pendByCat[cat].length})</div>}
-{pendByCat[cat].map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id} draggable onDragStart={()=>onDragStart(i.id)} onDragOver={e=>onDragOver(e,i.id)} onDrop={()=>onDrop(i.id)} onDragEnd={onDragEnd} style={{opacity:dragId===i.id?.4:1,borderTop:dragOverId===i.id&&dragId!==i.id?"2px solid var(--accent)":"2px solid transparent",transition:"opacity .15s"}}><div className="cb" onClick={()=>toggle(i.id)}/><span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}{catOrder.length<=1&&<span className="tg tg-n">{i.category}</span>}<button className="bi" onClick={()=>editItem(i)} title="Editar">{I.edit}</button><ConfirmDelete onConfirm={()=>rem(i.id)}/></div>);})}</div>))}{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
+{pendByCat[cat].map(i=>{const lp=lastUnitPrice(i.name);return(<div className="cr" key={i.id} draggable={!bulkMode} onDragStart={()=>onDragStart(i.id)} onDragOver={e=>onDragOver(e,i.id)} onDrop={()=>onDrop(i.id)} onDragEnd={onDragEnd} style={{opacity:dragId===i.id?.4:1,borderTop:dragOverId===i.id&&dragId!==i.id?"2px solid var(--accent)":"2px solid transparent",transition:"opacity .15s"}}>
+{bulkMode?<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${bulkSel[i.id]?"var(--accent)":"var(--border2)"}`,background:bulkSel[i.id]?"var(--accent)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all .2s"}} onClick={()=>toggleBulk(i.id)}>{bulkSel[i.id]&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={12} color="#fff"/>}</div>:<div className="cb" onClick={()=>toggle(i.id)}/>}
+<span className="cx">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>{lp&&<span style={{fontSize:11,color:"var(--text3)",background:"var(--bg4)",padding:"2px 8px",borderRadius:12}}>~{fmt(lp)}</span>}{catOrder.length<=1&&<span className="tg tg-n">{i.category}</span>}{!bulkMode&&<><button className="bi" onClick={()=>editItem(i)} title="Editar">{I.edit}</button><ConfirmDelete onConfirm={()=>rem(i.id)}/></>}</div>);})}</div>))}{done.length>0&&<div style={{padding:"12px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:11,textTransform:"uppercase",letterSpacing:1.5,color:"var(--text3)",fontWeight:600}}>Comprados ({done.length})</span>{doneTotal>0&&<span style={{fontSize:14,fontWeight:700,color:"var(--accent)"}}>{fmt(doneTotal)}</span>}</div>}
 {done.map(i=>{const cnt=isCountable(i.unit);const hasLots=i.lots&&i.lots.length>1;return(<div className="cr" key={i.id} style={{opacity:.7,flexWrap:"wrap"}}>
-<div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>
+{bulkMode?<div style={{width:22,height:22,borderRadius:6,border:`2px solid ${bulkSel[i.id]?"var(--accent)":"var(--border2)"}`,background:bulkSel[i.id]?"var(--accent)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all .2s"}} onClick={()=>toggleBulk(i.id)}>{bulkSel[i.id]&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={12} color="#fff"/>}</div>:<div className="cb ck" onClick={()=>toggle(i.id)}><Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/></div>}
 <span className="cx dn">{i.name}</span><span className="cm">{i.qty} {i.unit}</span>
 {i.price>0?<span style={{fontSize:12,color:"var(--green)",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>{setEditingPrice(i);setEditUP(i.unitPrice||"");}}>{hasLots?`${i.lots.length} lotes = `:cnt&&i.qty>1?`${fmt(i.unitPrice||0)} × ${i.qty} = `:""}{fmt(i.price)} {I.edit}</span>:<span style={{fontSize:11,color:"var(--text3)",cursor:"pointer"}} onClick={()=>{setEditingPrice(i);setEditUP("");}}>+ preço</span>}
-<ConfirmDelete onConfirm={()=>rem(i.id)}/>
+{!bulkMode&&<><button className="bi" onClick={()=>editItem(i)} title="Editar">{I.edit}</button><ConfirmDelete onConfirm={()=>rem(i.id)}/></>}
 {hasLots&&<div style={{width:"100%",paddingLeft:34,display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>{i.lots.map((l,idx)=>(<span key={idx} style={{fontSize:10,background:"var(--bg4)",padding:"2px 8px",borderRadius:8,color:"var(--text3)"}}>{l.weight>0?`${l.weight}${i.unit} `:""}{fmt(l.price)}</span>))}</div>}
 </div>);})}
 </div>
@@ -591,11 +620,13 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{trip.items.map((it,idx)=>(<span key={idx} style={{fontSize:11,background:"var(--bg3)",padding:"3px 8px",borderRadius:6,color:"var(--text3)"}}>{it.name} {it.totalPrice>0?fmt(it.totalPrice):""}</span>))}</div>
 </div>))}
 </div>}
-{modal&&<Modal title={modal==="edit"?"Editar Item":"Novo Item"} onClose={()=>setModal(false)}>
-<div className="fr"><div className="fg" style={{flex:2}}><label className="fl">Nome</label><input value={form.name||""} onChange={e=>setForm({...form,name:e.target.value})} autoFocus/></div><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div></div>
+{modal&&<Modal title={modal==="edit"?"Editar Item":"Novo Item"} onClose={()=>{setModal(false);setSuggestions([]);}}>
+<div className="fr"><div className="fg" style={{flex:2,position:"relative"}}><label className="fl">Nome</label><input value={form.name||""} onChange={e=>onNameChange(e.target.value)} autoFocus autoComplete="off"/>
+{suggestions.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"var(--bg2)",border:"1px solid var(--border2)",borderRadius:8,zIndex:10,maxHeight:160,overflowY:"auto",boxShadow:"var(--shadow)"}}>{suggestions.map((s,i)=>(<div key={i} style={{padding:"10px 14px",cursor:"pointer",fontSize:13,borderBottom:"1px solid var(--border)",transition:"background .1s"}} onClick={()=>{setForm({...form,name:s});setSuggestions([]);}} onMouseDown={e=>e.preventDefault()}>{s}</div>))}</div>}
+</div><div className="fg"><label className="fl">Qtd</label><input type="number" value={form.qty||""} onChange={e=>setForm({...form,qty:e.target.value})}/></div></div>
 <div className="fr"><div className="fg"><label className="fl">Unidade</label><select value={form.unit||c.units[0]} onChange={e=>setForm({...form,unit:e.target.value})}>{c.units.map(u=><option key={u}>{u}</option>)}</select></div>
 <div className="fg"><label className="fl">Categoria</label><select value={form.category||c.pantryCategories[0]} onChange={e=>setForm({...form,category:e.target.value})}>{c.pantryCategories.map(ct=><option key={ct}>{ct}</option>)}</select></div></div>
-<div className="ma"><button className="btn bg" onClick={()=>setModal(false)}>Cancelar</button><button className="btn bp" onClick={add}>{modal==="edit"?"Salvar":"Adicionar"}</button></div>
+<div className="ma"><button className="btn bg" onClick={()=>{setModal(false);setSuggestions([]);}}>Cancelar</button><button className="btn bp" onClick={()=>{add();setSuggestions([]);}}>{modal==="edit"?"Salvar":"Adicionar"}</button></div>
 </Modal>}
 {priceModal&&<Modal title={`Preço: ${priceModal.name}`} onClose={()=>{skipPrice();}}>
 {/* Toggle lots mode for variable weight items */}
@@ -628,14 +659,32 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div className="ma"><button className="btn bg" onClick={()=>setEditingPrice(null)}>Cancelar</button><button className="btn bp" onClick={saveEditPrice}>Salvar</button></div>
 </Modal>}
 {finishModal&&<Modal title="Finalizar Compra" onClose={()=>setFinishModal(false)}>
-<div style={{fontSize:24,fontWeight:800,color:"var(--accent)",textAlign:"center",marginBottom:16}}>{fmt(doneTotal)}</div>
+<div style={{fontSize:24,fontWeight:800,color:"var(--accent)",textAlign:"center",marginBottom:4}}>{fmt(doneTotal)}</div>
 <div style={{fontSize:13,color:"var(--text2)",marginBottom:16,textAlign:"center"}}>{done.length} ite{done.length>1?"ns":"m"} — vai para Finanças e Despensa</div>
-<div className="fg" style={{marginBottom:12}}><label className="fl">Forma de pagamento</label>
+<div className="fg" style={{marginBottom:12}}><label className="fl">Meu cartão / pagamento</label>
 <select value={finishCard} onChange={e=>setFinishCard(e.target.value)} style={{width:"100%"}}>
 <option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div>
-<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,cursor:"pointer"}} onClick={()=>setFinishPaid(!finishPaid)}>
+<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,cursor:"pointer"}} onClick={()=>setFinishPaid(!finishPaid)}>
 <div style={{width:22,height:22,borderRadius:6,border:`2px solid ${finishPaid?"var(--green)":"var(--yellow)"}`,background:finishPaid?"var(--green)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>{finishPaid&&<Icon d={<polyline points="20 6 9 17 4 12"/>} size={14} color="#fff"/>}</div>
-<span style={{fontSize:14,color:finishPaid?"var(--green)":"var(--yellow)",fontWeight:500}}>{finishPaid?"Já pago":"Ainda não pago (cartão, fatura, etc)"}</span>
+<span style={{fontSize:14,color:finishPaid?"var(--green)":"var(--yellow)",fontWeight:500}}>{finishPaid?"Já pago":"Pendente"}</span>
+</div>
+{/* Split section */}
+<div style={{borderTop:"1px solid var(--border)",paddingTop:12,marginTop:4}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+<label className="fl" style={{margin:0}}>Dividir com alguém?</label>
+<button className="btn bg bs" onClick={addFinishSplit}>{I.plus} Adicionar</button>
+</div>
+{finishSplits.map((sp,idx)=>(<div key={idx} style={{display:"flex",gap:8,alignItems:"flex-end",marginBottom:8,flexWrap:"wrap"}}>
+<div className="fg" style={{flex:1,minWidth:100}}><label className="fl">Pessoa</label><input value={sp.person||""} onChange={e=>updateFinishSplit(idx,"person",e.target.value)} placeholder="Nome"/></div>
+<div className="fg" style={{flex:1,minWidth:100}}><label className="fl">Cartão</label><select value={sp.card||""} onChange={e=>updateFinishSplit(idx,"card",e.target.value)}><option value="">Nenhum</option>{(c.cards||[]).map(cd=><option key={cd}>{cd}</option>)}</select></div>
+<div className="fg" style={{minWidth:100}}><label className="fl">Valor</label><MoneyInput value={sp.amount||0} onChange={v=>updateFinishSplit(idx,"amount",v)}/></div>
+<button className="bi" onClick={()=>removeFinishSplit(idx)} style={{marginBottom:4}}><Icon d={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} size={14}/></button>
+</div>))}
+{finishSplits.length>0&&<div style={{marginTop:8,padding:"10px 14px",background:"var(--bg3)",borderRadius:8,fontSize:13}}>
+<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"var(--text3)"}}>Total da compra</span><span style={{fontWeight:600}}>{fmt(doneTotal)}</span></div>
+{finishSplits.filter(s=>s.amount>0).map((s,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:2}}><span style={{color:"var(--text3)"}}>{s.person||"Outro"}{s.card?` (${s.card})`:""}</span><span style={{color:"var(--blue)"}}>- {fmt(s.amount)}</span></div>))}
+<div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:"1px solid var(--border)",marginTop:4}}><span style={{fontWeight:700,color:"var(--text)"}}>Minha parte</span><span style={{fontWeight:700,color:mainAmount>=0?"var(--accent)":"var(--red)"}}>{fmt(Math.max(mainAmount,0))}</span></div>
+</div>}
 </div>
 <div className="ma"><button className="btn bg" onClick={()=>setFinishModal(false)}>Cancelar</button><button className="btn bp" onClick={doFinish}>Confirmar</button></div>
 </Modal>}
