@@ -59,11 +59,11 @@ const DEFAULT_DATA = {
   habitLogs: [],
   todos: [],
   events: [],
-  _version: 8,
+  _version: 9,
 };
 
 // ─── Data migration — upgrades old data to new format ───
-const DATA_VERSION = 8;
+const DATA_VERSION = 9;
 const migrateData = (d) => {
   if (!d) return d;
   const v = d._version || 1;
@@ -99,6 +99,36 @@ const migrateData = (d) => {
   if (!m.events) m.events = [];
   if (!m.config.habitCategories) m.config.habitCategories = ["Saúde", "Produtividade", "Bem-estar", "Fitness"];
   if (!m.config.todoLists) m.config.todoLists = ["Pessoal", "Trabalho", "Casa"];
+  // v8→v9: Fix split trips — create missing card-split expenses
+  if (v < 9) {
+    const trips = m.shoppingTrips || [];
+    const expenses = m.expenses || [];
+    trips.forEach(trip => {
+      if (trip.splits && trip.splits.length > 0) {
+        trip.splits.forEach(sp => {
+          if ((sp.type || "card") === "card" && Number(sp.amount) > 0) {
+            const alreadyExists = expenses.some(e => e.fromTrip === trip.id && e.card === sp.card && Math.abs(e.amount - Number(sp.amount)) < 0.01);
+            if (!alreadyExists) {
+              const desc = "Compra " + new Date(trip.date + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" }) + " (" + sp.card + ")";
+              expenses.push({ id: Date.now() + Math.random(), desc, amount: Number(sp.amount), category: "Mercado", date: trip.date, paid: true, card: sp.card, fromTrip: trip.id, type: "variavel" });
+            }
+          }
+        });
+        // Also fix the main expense amount (subtract card splits)
+        const mainExp = expenses.find(e => e.fromTrip === trip.id && !e.desc.includes("("));
+        if (mainExp) {
+          const cardSplitsTotal = trip.splits.filter(s => (s.type || "card") === "card").reduce((a, s) => a + (Number(s.amount) || 0), 0);
+          const personSplitsTotal = trip.splits.filter(s => s.type === "person").reduce((a, s) => a + (Number(s.amount) || 0), 0);
+          mainExp.amount = Math.max(trip.total - cardSplitsTotal - personSplitsTotal, 0);
+          if (trip.splits.length > 0) {
+            mainExp.splitTotal = trip.total;
+            mainExp.splitMyShare = trip.total - personSplitsTotal;
+          }
+        }
+      }
+    });
+    m.expenses = expenses;
+  }
   m._version = DATA_VERSION;
   return m;
 };
@@ -571,12 +601,21 @@ const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
 const add=()=>{if(!form.name)return;if(modal==="edit"){const up=Number(form.unitPrice)||0;const tp=form.checked?calcTotal(up,Number(form.qty)||1,form.unit||c.units[0]):0;setData(d=>({...d,grocery:d.grocery.map(i=>i.id===form.id?{...i,name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],category:form.category||c.pantryCategories[0],unitPrice:up,price:tp}:i)}));toast("Item atualizado");}else{setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:0,unitPrice:0}]}));toast("Adicionado");}setModal(false);};
 const editItem=(item)=>{setForm({id:item.id,name:item.name,qty:item.qty,unit:item.unit,category:item.category,checked:item.checked,unitPrice:item.unitPrice||0,price:item.price||0});setSuggestions([]);setModal("edit");};
 const openFinish=()=>{setFinishCard(c.cards?.[0]||"");setFinishPaid(false);setFinishSplits([]);setFinishModal(true);};
-const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const trip={id:Date.now(),date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard,splits:finishSplits.length>0?finishSplits:undefined};
+const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const tripId=Date.now();const trip={id:tripId,date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard,splits:finishSplits.length>0?finishSplits:undefined};
 const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"});
-const myAmount=total-finishSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
-const expense={id:Date.now()+1,desc,amount:Math.max(myAmount,0),category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:trip.id,type:"variavel",splitTotal:finishSplits.length>0?total:0,splitMyShare:finishSplits.length>0?myAmount:0,splitPayers:finishSplits.filter(s=>s.amount>0).map(s=>({name:s.person||s.card||"Outro",amount:Number(s.amount)||0}))};
-setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[expense,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
-toast(`Compra finalizada! ${fmt(myAmount)} — ${finishCard||"sem cartão"}`);setFinishModal(false);};
+const cardSplits=finishSplits.filter(s=>(s.type||"card")==="card"&&Number(s.amount)>0);
+const personSplits=finishSplits.filter(s=>s.type==="person"&&Number(s.amount)>0);
+const othersTotal=personSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
+const cardSplitsTotal=cardSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
+const mainCardAmount=total-othersTotal-cardSplitsTotal;
+// Main expense (my principal card)
+const expenses=[];
+expenses.push({id:tripId+1,desc,amount:Math.max(mainCardAmount,0),category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:tripId,type:"variavel",splitTotal:finishSplits.length>0?total:0,splitMyShare:finishSplits.length>0?total-othersTotal:0,splitPayers:personSplits.map(s=>({name:s.person||"Outro",amount:Number(s.amount)||0}))});
+// Extra expenses for each of MY card splits
+cardSplits.forEach((s,i)=>{expenses.push({id:tripId+2+i,desc:desc+" ("+s.card+")",amount:Number(s.amount),category:"Mercado",date:today(),paid:finishPaid,card:s.card,fromTrip:tripId,type:"variavel"});});
+setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[...expenses,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
+const myTotal=mainCardAmount+cardSplitsTotal;
+toast(`Compra finalizada! ${fmt(myTotal)}${cardSplits.length>0?" em "+(1+cardSplits.length)+" cartões":""}`);setFinishModal(false);};
 const pend=data.grocery.filter(i=>!i.checked);const done=data.grocery.filter(i=>i.checked);
 const doneTotal=done.reduce((a,i)=>a+(i.price||0),0);
 const splitTotal=finishSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
@@ -624,7 +663,8 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 setData(d=>{
 const tripItems=trip.items.map(it=>({id:Date.now()+Math.random(),name:it.name,qty:it.qty||1,unit:it.unit||"un",checked:false,category:"Mercado",price:0,unitPrice:0}));
 const newExpenses=(d.expenses||[]).filter(e=>e.fromTrip!==trip.id);
-const newPantry=d.pantry.filter(p=>{const match=trip.items.find(ti=>ti.name===p.name);return!match;});
+const tripNames=new Set(trip.items.map(ti=>ti.name));
+const newPantry=d.pantry.filter(p=>!tripNames.has(p.name));
 return{...d,grocery:[...d.grocery,...tripItems],expenses:newExpenses,pantry:newPantry,shoppingTrips:(d.shoppingTrips||[]).filter(t=>t.id!==trip.id)};
 });toast("Compra revertida → itens voltaram para a lista");
 }}>↩ Reverter</button>
