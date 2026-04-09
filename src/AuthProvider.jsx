@@ -252,6 +252,8 @@ export default function AuthProvider({ children }) {
         return;
       }
       // Add member to house
+      // IMPORTANT: save houseCode to profile FIRST (Firestore rules check this)
+      await setUserProfile(user.uid, { houseCode: code, name: user.displayName || user.email });
       const alreadyMember = (info.members || []).some(m => m.uid === user.uid);
       if (!alreadyMember) {
         const updatedMembers = [...(info.members || []), {
@@ -263,7 +265,6 @@ export default function AuthProvider({ children }) {
         await setHouseInfo(code, { ...info, members: updatedMembers });
         info.members = updatedMembers;
       }
-      await setUserProfile(user.uid, { houseCode: code, name: user.displayName || user.email });
       setHouseCode(code);
       setHouseInfoState(info);
       setStep("ready");
