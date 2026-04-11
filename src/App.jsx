@@ -906,7 +906,7 @@ const incByCat={};mIncomes.forEach(i=>{const k=i.category||"Outros";incByCat[k]=
 // Filtered expenses
 const filtered=filter==="all"?mExpenses:filter==="paid"?mExpenses.filter(e=>e.paid):filter==="pending"?mExpenses.filter(e=>!e.paid):filter==="fixo"?mExpenses.filter(e=>e.type==="fixo"):filter==="variavel"?mExpenses.filter(e=>e.type==="variavel"||!e.type):filter==="parcelado"?mExpenses.filter(e=>e.installments>0):filter==="recorrente"?mExpenses.filter(e=>e.recurrence):mExpenses;
 // CRUD expenses
-const togglePaid=(id)=>{setData(d=>({...d,expenses:d.expenses.map(e=>e.id===id?{...e,paid:!e.paid}:e)}));};
+const togglePaid=(id)=>{setData(d=>{const expense=d.expenses.find(e=>e.id===id);if(!expense)return d;const newPaid=!expense.paid;if(expense.fromTrip){return{...d,expenses:d.expenses.map(e=>e.id===id||e.fromTrip===expense.fromTrip?{...e,paid:newPaid}:e)};}return{...d,expenses:d.expenses.map(e=>e.id===id?{...e,paid:newPaid}:e)};});};
 const saveExpense=()=>{if(!form.desc||!form.amount)return;
 const base={desc:form.desc,amount:Number(form.amount),category:form.category||c.expenseCategories[0],date:form.date||today(),paid:form.paid||false,card:form.card||"",type:form.type||"variavel",recurrence:form.recurrence||"",installments:Number(form.installments)||0,currentInstallment:Number(form.currentInstallment)||0,splitTotal:Number(form.splitTotal)||0,splitMyShare:Number(form.splitMyShare)||0,splitPayers:form.splitPayers||[]};
 if(modal==="add"){
