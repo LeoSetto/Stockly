@@ -601,7 +601,7 @@ const rem=(id)=>setData(d=>({...d,grocery:d.grocery.filter(i=>i.id!==id)}));
 const add=()=>{if(!form.name)return;if(modal==="edit"){const up=Number(form.unitPrice)||0;const tp=form.checked?calcTotal(up,Number(form.qty)||1,form.unit||c.units[0]):0;setData(d=>({...d,grocery:d.grocery.map(i=>i.id===form.id?{...i,name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],category:form.category||c.pantryCategories[0],unitPrice:up,price:tp}:i)}));toast("Item atualizado");}else{setData(d=>({...d,grocery:[...d.grocery,{id:Date.now(),name:form.name,qty:Number(form.qty)||1,unit:form.unit||c.units[0],checked:false,category:form.category||c.pantryCategories[0],price:0,unitPrice:0}]}));toast("Adicionado");}setModal(false);};
 const editItem=(item)=>{setForm({id:item.id,name:item.name,qty:item.qty,unit:item.unit,category:item.category,checked:item.checked,unitPrice:item.unitPrice||0,price:item.price||0});setSuggestions([]);setModal("edit");};
 const openFinish=()=>{setFinishCard(c.cards?.[0]||"");setFinishPaid(false);setFinishSplits([]);setFinishModal(true);};
-const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const tripId=Date.now();const trip={id:tripId,date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard,splits:finishSplits.length>0?finishSplits:undefined};
+const doFinish=()=>{const checked=data.grocery.filter(i=>i.checked);if(checked.length===0)return;const total=checked.reduce((a,i)=>a+(i.price||0),0);const tripId=Date.now();const trip={id:tripId,date:today(),items:checked.map(i=>({name:i.name,qty:i.qty,unit:i.unit,category:i.category||"Mercado",unitPrice:i.unitPrice||0,totalPrice:i.price||0})),total,card:finishCard,splits:finishSplits.length>0?finishSplits:undefined};
 const desc="Compra " + new Date().toLocaleDateString(c.locale||"pt-BR",{day:"numeric",month:"short"});
 const cardSplits=finishSplits.filter(s=>(s.type||"card")==="card"&&Number(s.amount)>0);
 const personSplits=finishSplits.filter(s=>s.type==="person"&&Number(s.amount)>0);
@@ -661,7 +661,7 @@ return(<div><div className="ph"><div className="pt">Lista de Compras</div><div c
 <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
 <button className="btn bg bs" onClick={()=>{
 setData(d=>{
-const tripItems=trip.items.map(it=>({id:Date.now()+Math.random(),name:it.name,qty:it.qty||1,unit:it.unit||"un",checked:false,category:"Mercado",price:0,unitPrice:0}));
+const tripItems=trip.items.map(it=>({id:Date.now()+Math.random(),name:it.name,qty:it.qty||1,unit:it.unit||"un",checked:false,category:it.category||"Mercado",price:0,unitPrice:0}));
 const newExpenses=(d.expenses||[]).filter(e=>e.fromTrip!==trip.id);
 const tripNames=new Set(trip.items.map(ti=>ti.name));
 const newPantry=d.pantry.filter(p=>!tripNames.has(p.name));
