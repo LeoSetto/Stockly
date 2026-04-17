@@ -59,11 +59,11 @@ const DEFAULT_DATA = {
   habitLogs: [],
   todos: [],
   events: [],
-  _version: 9,
+  _version: 10,
 };
 
 // ─── Data migration — upgrades old data to new format ───
-const DATA_VERSION = 9;
+const DATA_VERSION = 10;
 const migrateData = (d) => {
   if (!d) return d;
   const v = d._version || 1;
@@ -99,30 +99,38 @@ const migrateData = (d) => {
   if (!m.events) m.events = [];
   if (!m.config.habitCategories) m.config.habitCategories = ["Saúde", "Produtividade", "Bem-estar", "Fitness"];
   if (!m.config.todoLists) m.config.todoLists = ["Pessoal", "Trabalho", "Casa"];
-  // v8→v9: Fix split trips — create missing card-split expenses
-  if (v < 9) {
+  // v8→v9→v10: Fix split trips — create missing card-split expenses & fix amounts
+  if (v < 10) {
     const trips = m.shoppingTrips || [];
     const expenses = m.expenses || [];
     trips.forEach(trip => {
       if (trip.splits && trip.splits.length > 0) {
-        trip.splits.forEach(sp => {
-          if ((sp.type || "card") === "card" && Number(sp.amount) > 0) {
-            const alreadyExists = expenses.some(e => e.fromTrip === trip.id && e.card === sp.card && Math.abs(e.amount - Number(sp.amount)) < 0.01);
-            if (!alreadyExists) {
-              const desc = "Compra " + new Date(trip.date + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" }) + " (" + sp.card + ")";
-              expenses.push({ id: Date.now() + Math.random(), desc, amount: Number(sp.amount), category: "Mercado", date: trip.date, paid: true, card: sp.card, fromTrip: trip.id, type: "variavel" });
-            }
+        const cardSplits = trip.splits.filter(s => (s.type || "card") === "card" && Number(s.amount) > 0);
+        const personSplits = trip.splits.filter(s => s.type === "person" && Number(s.amount) > 0);
+        const cardSplitsTotal = cardSplits.reduce((a, s) => a + (Number(s.amount) || 0), 0);
+        const personSplitsTotal = personSplits.reduce((a, s) => a + (Number(s.amount) || 0), 0);
+        const mainCardAmount = Math.max(trip.total - cardSplitsTotal - personSplitsTotal, 0);
+        const hasPeopleSplit = personSplits.length > 0;
+        // Create missing card-split expenses
+        cardSplits.forEach(sp => {
+          const alreadyExists = expenses.some(e => e.fromTrip === trip.id && e.card === sp.card && Math.abs(e.amount - Number(sp.amount)) < 0.01);
+          if (!alreadyExists) {
+            const desc = "Compra " + new Date(trip.date + "T12:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" }) + " (" + sp.card + ")";
+            expenses.push({ id: Date.now() + Math.random(), desc, amount: Number(sp.amount), category: "Mercado", date: trip.date, paid: true, card: sp.card, fromTrip: trip.id, type: "variavel" });
           }
         });
-        // Also fix the main expense amount (subtract card splits)
+        // Fix the main expense
         const mainExp = expenses.find(e => e.fromTrip === trip.id && !e.desc.includes("("));
         if (mainExp) {
-          const cardSplitsTotal = trip.splits.filter(s => (s.type || "card") === "card").reduce((a, s) => a + (Number(s.amount) || 0), 0);
-          const personSplitsTotal = trip.splits.filter(s => s.type === "person").reduce((a, s) => a + (Number(s.amount) || 0), 0);
-          mainExp.amount = Math.max(trip.total - cardSplitsTotal - personSplitsTotal, 0);
-          if (trip.splits.length > 0) {
+          mainExp.amount = mainCardAmount;
+          if (hasPeopleSplit) {
             mainExp.splitTotal = trip.total;
-            mainExp.splitMyShare = trip.total - personSplitsTotal;
+            mainExp.splitMyShare = mainCardAmount + cardSplitsTotal;
+            mainExp.splitPayers = personSplits.map(s => ({ name: s.person || "Outro", amount: Number(s.amount) || 0 }));
+          } else {
+            mainExp.splitTotal = 0;
+            mainExp.splitMyShare = 0;
+            mainExp.splitPayers = [];
           }
         }
       }
@@ -608,10 +616,14 @@ const personSplits=finishSplits.filter(s=>s.type==="person"&&Number(s.amount)>0)
 const othersTotal=personSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
 const cardSplitsTotal=cardSplits.reduce((a,s)=>a+(Number(s.amount)||0),0);
 const mainCardAmount=total-othersTotal-cardSplitsTotal;
-// Main expense (my principal card)
+const hasPeopleSplit=personSplits.length>0;
+// Main expense (my principal card — only MY portion)
 const expenses=[];
-expenses.push({id:tripId+1,desc,amount:Math.max(mainCardAmount,0),category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:tripId,type:"variavel",splitTotal:finishSplits.length>0?total:0,splitMyShare:finishSplits.length>0?total-othersTotal:0,splitPayers:personSplits.map(s=>({name:s.person||"Outro",amount:Number(s.amount)||0}))});
-// Extra expenses for each of MY card splits
+expenses.push({id:tripId+1,desc,amount:Math.max(mainCardAmount,0),category:"Mercado",date:today(),paid:finishPaid,card:finishCard,fromTrip:tripId,type:"variavel",
+splitTotal:hasPeopleSplit?total:0,
+splitMyShare:hasPeopleSplit?Math.max(mainCardAmount+cardSplitsTotal,0):0,
+splitPayers:hasPeopleSplit?personSplits.map(s=>({name:s.person||"Outro",amount:Number(s.amount)||0})):[]});
+// Extra expenses for each of MY other cards
 cardSplits.forEach((s,i)=>{expenses.push({id:tripId+2+i,desc:desc+" ("+s.card+")",amount:Number(s.amount),category:"Mercado",date:today(),paid:finishPaid,card:s.card,fromTrip:tripId,type:"variavel"});});
 setData(d=>({...d,shoppingTrips:[trip,...(d.shoppingTrips||[])],expenses:[...expenses,...(d.expenses||[])],pantry:[...d.pantry,...checked.map(i=>({id:Date.now()+Math.random(),name:i.name,qty:i.qty,unit:i.unit,location:c.locations[0]||"Despensa",expiry:"",category:i.category}))],grocery:d.grocery.filter(i=>!i.checked)}));
 const myTotal=mainCardAmount+cardSplitsTotal;
